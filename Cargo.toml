@@ -1,0 +1,11 @@
+[package]
+name = "sat_encoder"
+version = "0.1.0"
+authors = ["neuring"]
+edition = "2018"
+
+[dependencies]
+cadical = "0.1.13"
+
+[dev-dependencies]
+num-integer = "0.1.44"
