@@ -12,13 +12,19 @@ use std::{
 mod constraints;
 
 pub mod prelude {
-    pub use super::{constraints::Clause, Encoder, Lit::{self, *}, Solver};
+    pub use super::{
+        constraints::Clause,
+        Encoder,
+        Lit::{self, *},
+        Solver,
+    };
 }
 
-pub use constraints::{AtMostK, AtleastK, If, Expr};
+use constraints::util::{self, ClauseCollector};
+pub use constraints::{AtMostK, AtleastK, Expr, If};
 
 /// Generic interface for solvers (or Wrapper) to implement.
-pub trait Encoder<V>: Sized {
+pub trait Encoder<V: SatVar>: Sized {
     /// Add raw clause as integer SAT variable.
     /// These are usually determined using `VarMap`.
     fn add_clause<I>(&mut self, lits: I)
@@ -36,9 +42,35 @@ pub trait Encoder<V>: Sized {
 
 /// Trait used to express a constraint.
 /// Constraints represent define a finite set of clauses.
-pub trait Constraint<V>: Debug {
+pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
     /// Encode `Self` as an constraint using `solver`.
     fn encode<E: Encoder<V>>(self, solver: &mut E);
+}
+
+/// Trait used to express a constraint which can imply another variable,
+/// a so called representative (repr).
+// We need this trait because we cannot generally express the implication of a constraint
+// to a repr.
+// For example if we take all clauses of an AtMostK constraint the input lits
+// can (less ore equal k) be correct but unnamed vars can be choosen such that some
+// clauses might still be false which then causes repr to be false.
+// The behaviour we would want is that repr is false only if the constraint (more than
+// k lits are true) is false.
+// If a constraint is however able to express this implication it can implement it.
+pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
+    /// Encode if `Self` is satisified, that `repr` is true.
+    fn encode_constraint_implies_repr<E: Encoder<V>>(self, repr: Option<i32>, solver: &mut E) -> i32;
+
+    /// Encode if and only if `Self` is satisified, that `repr` is true.
+    fn encode_constraint_equals_repr<E: Encoder<V>>(self, repr: Option<i32>, solver: &mut E) -> i32 {
+        let clone = self.clone();
+
+        let repr = self.encode_constraint_implies_repr(repr, solver);
+
+        util::repr_implies_constraint(clone, repr, solver);
+
+        repr
+    }
 }
 
 /// Enum to describe the polarity of variables.
@@ -50,11 +82,27 @@ pub enum Lit<V> {
 
 impl<V> Lit<V> {
     /// Returns the underlying variable.
-    #[allow(unused)]
     pub fn var(&self) -> &V {
         match self {
             Lit::Pos(v) | Lit::Neg(v) => v,
         }
+    }
+
+    /// Returns the owned underlying variable
+    pub fn unwrap(self) -> V {
+        match self {
+            Lit::Pos(v) | Lit::Neg(v) => v,
+        }
+    }
+
+    /// Returns true if `Lit` is positive.
+    pub fn is_pos(&self) -> bool {
+        matches!(self, Self::Pos(_))
+    }
+
+    /// Returns false if `Lit` is negative.
+    pub fn is_neg(&self) -> bool {
+        matches!(self, Self::Pos(_))
     }
 }
 
@@ -70,9 +118,9 @@ impl<V> Neg for Lit<V> {
 }
 
 /// Trait which expresses the required trait bounds for a variable.
-pub trait SatVar: Hash + Eq + Clone {}
+pub trait SatVar: Debug + Hash + Eq + Clone {}
 
-impl<V: Hash + Eq + Clone> SatVar for V {}
+impl<V: Hash + Eq + Clone + Debug> SatVar for V {}
 
 /// Mapper from user defined variables and integer sat variables used by the
 /// solver backend.
@@ -102,11 +150,10 @@ impl<V: Debug> Debug for VarMap<V> {
 }
 
 impl<V: SatVar> VarMap<V> {
-
-    /// Translates an element of type `V` to a integer SAT variable used by the 
+    /// Translates an element of type `V` to a integer SAT variable used by the
     /// backend solver.
     /// If `var` wasn't already used it generates a new SAT variable.
-    /// Depending on whether `var` is `Pos` or `Neg` the returned value is 
+    /// Depending on whether `var` is `Pos` or `Neg` the returned value is
     /// positive or negative.
     pub fn add_var(&mut self, lit: Lit<V>) -> i32 {
         let (var, pol) = match lit {
@@ -138,16 +185,19 @@ impl<V: SatVar> VarMap<V> {
         Some(pol * self.forward.get(&var).copied()?)
     }
 
-
     /// Lookup the correct `V` based on the integer SAT variable.
-    pub fn lookup(&self, lit: i32) -> Option<&V> {
-        self.reverse.get(&lit)
+    pub fn lookup(&self, lit: i32) -> Option<Lit<V>> {
+        let var = self.reverse.get(&lit.abs())?.clone();
+
+        if lit < 0 {
+            Some(Lit::Neg(var))
+        } else {
+            Some(Lit::Pos(var))
+        }
     }
 
-    /// Returns the number of used variables.
-    /// NOTE: This might be larger than the used SATVars.
-    pub fn num_vars(&self) -> usize {
-        self.next_id as usize
+    pub(crate) fn iter_internal_vars(&self) -> impl Iterator<Item = i32> {
+        1..self.next_id
     }
 }
 
@@ -160,6 +210,86 @@ impl<V> VarMap<V> {
     }
 }
 
+/// Result of solving.
+pub struct Model<V> {
+    assignments: HashSet<VarType<V>>,
+}
+
+impl<V: SatVar> Model<V> {
+    /// Returns an interator over assigned literals of user defined variables.
+    pub fn vars(&self) -> impl Iterator<Item = Lit<V>> + Clone + '_ {
+        self.all_vars().filter_map(|v| match v {
+            VarType::Named(v) => Some(v),
+            VarType::Unnamed(_) => None,
+        })
+    }
+
+    /// Returns an interator over all defined variables.
+    /// This includes unnamed variables used by various constraints.
+    pub fn all_vars(&self) -> impl Iterator<Item = VarType<V>> + Clone + '_ {
+        self.assignments.iter().cloned()
+    }
+
+    /// Returns the assignment of a variable.
+    /// Returns `None` if `v` was never used.
+    pub fn var(&self, v: V) -> Option<bool> {
+        let contains_pos = self
+            .assignments
+            .contains(&VarType::Named(Lit::Pos(v.clone())));
+        let contains_neg = self.assignments.contains(&VarType::Named(Lit::Neg(v)));
+
+        match (contains_pos, contains_neg) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            (false, false) => None,
+            (true, true) => unreachable!(),
+        }
+    }
+
+    /// Returns the assignment of a literal.
+    /// Returns `None` if `lit` was never used.
+    pub fn lit(&self, lit: Lit<V>) -> Option<bool> {
+        let is_pos = lit.is_pos();
+
+        let v = self.var(lit.unwrap())?;
+
+        if is_pos {
+            Some(v)
+        } else {
+            Some(!v)
+        }
+    }
+
+    pub(crate) fn lit_internal(&self, lit: VarType<V>) -> bool {
+        self.assignments.contains(&lit)
+    }
+}
+
+impl<V: SatVar + Ord + Debug> Model<V> {
+    pub(crate) fn print_model(&self) {
+        println!("{:?}", {
+            let mut m = self.all_vars().collect::<Vec<_>>();
+            m.sort();
+            m
+        });
+    }
+}
+
+impl<V: SatVar + Debug + Ord> Debug for Model<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut model: Vec<_> = self.vars().collect();
+        model.sort();
+
+        model.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum VarType<V> {
+    Named(Lit<V>),
+    Unnamed(i32),
+}
+
 /// Default Solver implementation using the cadical sat solver.
 pub struct Solver<V> {
     pub internal: cadical::Solver,
@@ -167,7 +297,6 @@ pub struct Solver<V> {
 }
 
 impl<V: SatVar> Solver<V> {
-
     /// Creates a new solver.
     pub fn new() -> Self {
         Self {
@@ -178,36 +307,49 @@ impl<V: SatVar> Solver<V> {
 
     /// Solve the encoded problem.
     /// If problem is unsat then `None` is returned.
-    /// Otherwise the set of all used `Lit<V>` is returned `Pos` or `Neg` depending
-    /// on what is required for the model to satisfy.
-    pub fn solve(&mut self) -> Option<HashSet<Lit<V>>> {
+    /// Otherwise a model of the problem is returned.
+    pub fn solve(&mut self) -> Option<Model<V>> {
         let result = self.internal.solve();
 
         if let Some(true) = result {
-            let result = (1..=self.varmap.num_vars())
-                .filter_map(|v| {
-                    let sat_var = self.varmap.lookup(v as i32)?.clone();
+            let assignments = self
+                .varmap
+                .iter_internal_vars()
+                .map(|v| {
+                    let v = v as i32;
+                    let assignment = self.internal.value(v).unwrap_or(true);
 
-                    if self.internal.value(v as i32).unwrap_or(true) {
-                        Some(Lit::Pos(sat_var))
+                    if let Some(var) = self.varmap.lookup(v) {
+                        let var = var.unwrap();
+                        let lit = if assignment {
+                            Lit::Pos(var)
+                        } else {
+                            Lit::Neg(var)
+                        };
+                        VarType::Named(lit)
                     } else {
-                        Some(Lit::Neg(sat_var))
+                        let lit = if assignment { v } else { -v };
+                        VarType::Unnamed(lit)
                     }
                 })
                 .collect();
-            Some(result)
+            Some(Model { assignments })
         } else {
             None
         }
     }
 }
 
-impl<V> Encoder<V> for Solver<V> {
+impl<V: SatVar> Encoder<V> for Solver<V> {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,
     {
-        self.internal.add_clause(lits);
+        //TODO: remove
+        let mut lits: Vec<_> = lits.collect();
+        lits.sort();
+        println!("{:?}", lits);
+        self.internal.add_clause(lits.into_iter());
     }
 
     fn varmap(&mut self) -> &mut VarMap<V> {
@@ -231,12 +373,12 @@ impl<V> DebugSolver<V> {
     /// Function for API parity with `Solver`.
     /// #Panics
     /// Always
-    pub fn solve(&mut self) -> Option<HashSet<Lit<V>>> {
+    pub fn solve(&mut self) -> Option<Model<V>> {
         panic!("Cannot solve a DebugSolver");
     }
 }
 
-impl<V> Encoder<V> for DebugSolver<V> {
+impl<V: SatVar> Encoder<V> for DebugSolver<V> {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,

@@ -5,13 +5,21 @@ use std::{
     ops::{BitAnd, BitOr, Neg},
 };
 
+use crate::ConstraintRepr;
+
 use super::{Constraint, Encoder, Lit, SatVar, VarMap};
 
-mod expr;
 mod cardinality;
+mod conditional;
+mod expr;
+pub mod util;
 
-pub use expr::Expr;
+#[cfg(test)]
+mod test_util;
+
 pub use cardinality::{AtMostK, AtleastK};
+pub use conditional::If;
+pub use expr::Expr;
 
 #[macro_export]
 macro_rules! clause {
@@ -27,18 +35,57 @@ impl<V: SatVar + Debug> Constraint<V> for Lit<V> {
     }
 }
 
+impl<V: SatVar + Debug> ConstraintRepr<V> for Lit<V> {
+    fn encode_constraint_implies_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
+        let var = solver.varmap().add_var(self);
+
+        if let Some(repr) = repr {
+            solver.add_clause(clause![-var, repr]);
+            repr
+        } else {
+            var
+        }
+    }
+}
+
 /// Constraint which represents a simple clause.
 #[derive(Clone)]
 pub struct Clause<I>(pub I);
 
-impl<V: SatVar, I: Clone> Constraint<V> for Clause<I>
+impl<V, I> Constraint<V> for Clause<I>
 where
-    V: Debug + Clone,
+    V: SatVar,
     I: Iterator<Item = Lit<V>> + Clone,
 {
     fn encode<E: Encoder<V>>(self, solver: &mut E) {
         let clause: Vec<_> = self.0.map(|lit| solver.varmap().add_var(lit)).collect();
         solver.add_clause(clause.into_iter());
+    }
+}
+
+impl<V, I> ConstraintRepr<V> for Clause<I>
+where
+    V: SatVar,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn encode_constraint_implies_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
+        let repr = repr.unwrap_or_else(|| solver.varmap().new_var());
+
+        for lit in self.0 {
+            let sat_lit = solver.varmap().add_var(lit);
+
+            solver.add_clause(clause![-sat_lit, repr]);
+        }
+
+        repr
     }
 }
 
@@ -52,58 +99,91 @@ where
     }
 }
 
-/// Implication constraint.
-/// If all of `cond` are true then the `then` constraint has to be true.
-pub struct If<I1, C> {
-    pub cond: I1, // if all lits of cond iterator are true
-    pub then: C,  // then this condition has to be true as well.
-}
+#[cfg(test)]
+mod tests {
+    use crate::{ConstraintRepr, Encoder, Lit, Solver, VarType};
 
-struct IfThenEncoderWrapper<'a, E> {
-    internal: &'a mut E,
-    prefix: Vec<i32>,
-}
+    use super::{*, test_util::retry_until_unsat};
 
-impl<'a, V, E: Encoder<V>> Encoder<V> for IfThenEncoderWrapper<'a, E> {
-    fn add_clause<I>(&mut self, lits: I)
-    where
-        I: Iterator<Item = i32>,
-    {
-        self.internal
-            .add_clause(lits.chain(self.prefix.iter().copied()));
+    #[test]
+    fn lit_implies_repr() {
+        let mut solver = Solver::new();
+
+        let lit = Lit::Pos(1);
+
+        let repr = solver.varmap().new_var();
+        let r = lit.encode_constraint_implies_repr(Some(repr), &mut solver);
+        assert_eq!(repr, r);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+            if model.lit(lit).unwrap() {
+                model.lit_internal(VarType::Unnamed(repr))
+            } else {
+                true
+            }
+        });
+        assert_eq!(res, 2);
     }
 
-    fn varmap(&mut self) -> &mut VarMap<V> {
-        self.internal.varmap()
+    #[test]
+    fn lit_equals_repr() {
+        let mut solver = Solver::new();
+
+        let lit = Lit::Pos(1);
+
+        let repr = solver.varmap().new_var();
+        let r = lit.encode_constraint_equals_repr(Some(repr), &mut solver);
+        assert_eq!(repr, r);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+            if model.lit(lit).unwrap() {
+                model.lit_internal(VarType::Unnamed(repr))
+            } else {
+                model.lit_internal(VarType::Unnamed(-repr))
+            }
+        });
+        assert_eq!(res, 2);
     }
-}
 
-impl<V, C, I1> Constraint<V> for If<I1, C>
-where
-    V: Debug + Clone + SatVar,
-    C: Constraint<V>,
-    I1: Iterator<Item = Lit<V>> + Clone,
-{
-    fn encode<E: Encoder<V>>(self, solver: &mut E) {
-        let prefix = self.cond.map(|lit| solver.varmap().add_var(-lit)).collect();
+    #[test]
+    fn clause_implies_repr() {
+        let mut solver = Solver::new();
 
-        let mut solver = IfThenEncoderWrapper {
-            internal: solver,
-            prefix,
-        };
+        let clause = Clause((1..=6).map(Lit::Pos));
 
-        self.then.encode(&mut solver);
+        let r = clause.encode_constraint_implies_repr(None, &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+
+            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
+                model.lit_internal(VarType::Unnamed(r))
+            } else {
+                true
+            }
+        });
+        assert_eq!(res, 64);
     }
-}
 
-impl<V: Debug, I, C> Debug for If<I, C>
-where
-    I: Iterator<Item = Lit<V>> + Clone,
-    C: Constraint<V>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let lits: Vec<_> = self.cond.clone().collect();
+    #[test]
+    fn clause_equals_repr() {
+        let mut solver = Solver::new();
 
-        f.debug_tuple("If").field(&lits).field(&self.then).finish()
+        let clause = Clause((1..=6).map(Lit::Pos));
+
+        let r = clause.encode_constraint_equals_repr(None, &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+
+            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
+                model.lit_internal(VarType::Unnamed(r))
+            } else {
+                model.lit_internal(VarType::Unnamed(-r))
+            }
+        });
+        assert_eq!(res, 64);
     }
 }
