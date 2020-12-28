@@ -99,11 +99,59 @@ where
     }
 }
 
+/// Constraint which requires all lits to be true.
+/// In some ways it's the opposite of `Clause`.
+#[derive(Clone)]
+struct And<I>(I);
+
+impl<V, I> Constraint<V> for And<I>
+where
+    V: SatVar,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn encode<E: Encoder<V>>(self, solver: &mut E) {
+        for v in self.0 {
+            let v = solver.varmap().add_var(v);
+            solver.add_clause(clause![v]);
+        }
+    }
+}
+
+impl<V, I> ConstraintRepr<V> for And<I>
+where
+    V: SatVar,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn encode_constraint_implies_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
+        let repr = repr.unwrap_or_else(|| solver.varmap().new_var());
+
+        let vars: Vec<_> = self.0.map(|l| solver.varmap().add_var(l)).collect();
+        solver.add_clause(vars.iter().copied().chain(clause![-repr]));
+
+        repr
+    }
+}
+
+impl<I, V> Debug for And<I>
+where
+    V: Debug,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let list: Vec<_> = self.0.clone().collect();
+        f.debug_tuple("And").field(&list).finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{ConstraintRepr, Encoder, Lit, Solver, VarType};
 
-    use super::{*, test_util::retry_until_unsat};
+    use super::{test_util::retry_until_unsat, *};
 
     #[test]
     fn lit_implies_repr() {
@@ -179,6 +227,46 @@ mod tests {
             model.print_model();
 
             if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
+                model.lit_internal(VarType::Unnamed(r))
+            } else {
+                model.lit_internal(VarType::Unnamed(-r))
+            }
+        });
+        assert_eq!(res, 64);
+    }
+
+    #[test]
+    fn and_implies_repr() {
+        let mut solver = Solver::new();
+
+        let constraint = And((1..=6).map(Lit::Pos));
+
+        let r = constraint.encode_constraint_implies_repr(None, &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+
+            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
+                model.lit_internal(VarType::Unnamed(r))
+            } else {
+                true
+            }
+        });
+        assert_eq!(res, 64);
+    }
+
+    #[test]
+    fn and_equals_repr() {
+        let mut solver = Solver::new();
+
+        let constraint = And((1..=6).map(Lit::Pos));
+
+        let r = constraint.encode_constraint_equals_repr(None, &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+
+            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
                 model.lit_internal(VarType::Unnamed(r))
             } else {
                 model.lit_internal(VarType::Unnamed(-r))
