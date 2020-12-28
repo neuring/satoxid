@@ -26,7 +26,11 @@ where
     V: SatVar + Clone + Debug,
     I: Iterator<Item = Lit<V>> + Clone,
 {
-    fn encode_constraint_implies_repr<E: Encoder<V>>(self, repr: Option<i32>, solver: &mut E) -> i32 {
+    fn encode_constraint_implies_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
         let repr = repr.unwrap_or_else(|| solver.varmap().new_var());
         // Generate repr for `encode_atmost_k`.
         encode_atmost_k(self, Some(repr), solver);
@@ -273,7 +277,7 @@ mod tests {
 
         let models = retry_until_unsat(&mut solver, |model| {
             model.print_model();
-            model.vars().filter(|l| l.is_pos()).count() <= k as usize
+            assert!(model.vars().filter(|l| l.is_pos()).count() <= k as usize)
         });
         assert_eq!(models, 638);
     }
@@ -287,7 +291,7 @@ mod tests {
 
         let models = retry_until_unsat(&mut solver, |model| {
             model.print_model();
-            model.vars().filter(|l| l.is_pos()).count() <= k as usize
+            assert!(model.vars().filter(|l| l.is_pos()).count() <= k as usize)
         });
         assert_eq!(models, 1);
     }
@@ -303,10 +307,7 @@ mod tests {
 
         let models = retry_until_unsat(&mut solver, |model| {
             if model.vars().filter(|l| l.is_pos()).count() < k as usize {
-                model.lit_internal(VarType::Unnamed(repr))
-            } else {
-                println!("{:?}", model.lit_internal(VarType::Unnamed(repr)));
-                true
+                assert!(model.lit_internal(VarType::Unnamed(repr)))
             }
         });
         assert_eq!(models, 1024);
@@ -324,9 +325,9 @@ mod tests {
         let models = retry_until_unsat(&mut solver, |model| {
             model.print_model();
             if model.vars().filter(|l| l.is_pos()).count() <= k as usize {
-                model.lit_internal(VarType::Unnamed(repr))
+                assert!(model.lit_internal(VarType::Unnamed(repr)))
             } else {
-                model.lit_internal(VarType::Unnamed(-repr))
+                assert!(model.lit_internal(VarType::Unnamed(-repr)))
             }
         });
         assert_eq!(models, 1024);
@@ -345,7 +346,7 @@ mod tests {
 
         let models = retry_until_unsat(&mut solver, |model| {
             model.print_model();
-            model.vars().filter(|l| l.is_pos()).count() > k as usize
+            assert!(model.vars().filter(|l| l.is_pos()).count() > k as usize)
         });
         assert_eq!(models, (1 << 10) - 1);
     }
@@ -357,7 +358,7 @@ mod tests {
         solver.add_constraint(AtleastK { k: 5, lits });
 
         let models = retry_until_unsat(&mut solver, |model| {
-            model.vars().filter(|l| l.is_pos()).count() >= 5
+            assert!(model.vars().filter(|l| l.is_pos()).count() >= 5)
         });
         assert_eq!(models, 638);
     }

@@ -1,6 +1,10 @@
-use std::{fmt::{self, Debug}, iter::once, ops::{BitAnd, BitOr, Neg}};
+use std::{
+    fmt::{self, Debug},
+    iter::once,
+    ops::{BitAnd, BitOr, Neg},
+};
 
-use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap, clause};
+use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap};
 
 use super::util::ClauseCollector;
 
@@ -71,7 +75,7 @@ where
     V: SatVar,
     C: ConstraintRepr<V> + Clone + 'static,
 {
-    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector<V>) -> i32{
+    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector<V>) -> i32 {
         let this = *self;
         <Self as ConstraintRepr<V>>::encode_constraint_equals_repr(this, None, solver)
     }
@@ -160,16 +164,42 @@ impl<V> Neg for Expr<V> {
     }
 }
 
-impl<V: Debug + SatVar> Constraint<V> for Expr<V> {
+impl<V: SatVar> Constraint<V> for Expr<V> {
     fn encode<E: Encoder<V>>(self, solver: &mut E) {
         let v = self.encode_tree(solver);
         solver.add_clause(clause!(v));
     }
 }
 
+impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
+    fn encode_constraint_implies_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
+        let r = self.encode_tree(solver);
+
+        if let Some(repr) = repr {
+            solver.add_clause(clause!(repr, -r));
+            solver.add_clause(clause!(-repr, r));
+            repr
+        } else {
+            r
+        }
+    }
+
+    fn encode_constraint_equals_repr<E: Encoder<V>>(
+        self,
+        repr: Option<i32>,
+        solver: &mut E,
+    ) -> i32 {
+        self.encode_constraint_implies_repr(repr, solver)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{AtMostK, constraints::test_util::retry_until_unsat, prelude::*};
+    use crate::{constraints::test_util::retry_until_unsat, prelude::*, AtMostK, VarType};
 
     use super::*;
 
@@ -184,7 +214,7 @@ mod tests {
         solver.add_constraint(expr);
 
         let res = retry_until_unsat(&mut solver, |model| {
-            model.vars().filter(|l| matches!(l, Pos(_))).count() == 3
+            assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() == 3)
         });
         assert_eq!(res, 1);
     }
@@ -200,7 +230,7 @@ mod tests {
         solver.add_constraint(expr);
 
         let res = retry_until_unsat(&mut solver, |model| {
-            model.vars().filter(|l| matches!(l, Pos(_))).count() > 0
+            assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() > 0);
         });
         assert_eq!(res, 7);
     }
@@ -215,9 +245,7 @@ mod tests {
 
         solver.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut solver, |model| {
-            model.lit(Neg(1)).unwrap()
-        });
+        let res = retry_until_unsat(&mut solver, |model| assert!(model.lit(Neg(1)).unwrap()));
         assert_eq!(res, 1);
     }
 
@@ -232,8 +260,12 @@ mod tests {
         solver.add_constraint(expr);
 
         let res = retry_until_unsat(&mut solver, |model| {
-            let (a, b, c) = (model.var(1).unwrap(), model.var(2).unwrap(), model.var(3).unwrap());
-            a && b || !a && c
+            let (a, b, c) = (
+                model.var(1).unwrap(),
+                model.var(2).unwrap(),
+                model.var(3).unwrap(),
+            );
+            assert!(a && b || !a && c);
         });
         assert_eq!(res, 4);
     }
@@ -241,7 +273,7 @@ mod tests {
     #[test]
     fn expr_constraint() {
         let vars = (0..5).map(Pos);
-        let constraint = AtMostK { k: 3, lits: vars};
+        let constraint = AtMostK { k: 3, lits: vars };
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
@@ -253,9 +285,81 @@ mod tests {
             assert!(model.lit(Pos(3)).unwrap());
 
             assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3);
-
-            true
         });
         assert_eq!(res, 7);
+    }
+
+    #[test]
+    fn expr_implies_repr() {
+        let lit = Expr::from(Pos(1));
+
+        let expr = lit.clone() & Pos(2) | -lit & Pos(3);
+
+        let mut solver = Solver::new();
+
+        let repr = solver.varmap().new_var();
+        expr.encode_constraint_equals_repr(Some(repr), &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            let (a, b, c) = (
+                model.var(1).unwrap(),
+                model.var(2).unwrap(),
+                model.var(3).unwrap(),
+            );
+            if a && b || !a && c {
+                assert!(model.lit_internal(VarType::Unnamed(repr)));
+            }
+        });
+        assert_eq!(res, 8);
+    }
+
+    #[test]
+    fn expr_equals_repr() {
+        let lit = Expr::from(Pos(1));
+
+        let expr = lit.clone() & Pos(2) | -lit & Pos(3);
+
+        let mut solver = Solver::new();
+
+        let repr = solver.varmap().new_var();
+        expr.encode_constraint_equals_repr(Some(repr), &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            let (a, b, c) = (
+                model.var(1).unwrap(),
+                model.var(2).unwrap(),
+                model.var(3).unwrap(),
+            );
+            if a && b || !a && c {
+                assert!(model.lit_internal(VarType::Unnamed(repr)));
+            } else {
+                assert!(model.lit_internal(VarType::Unnamed(-repr)));
+            }
+        });
+        assert_eq!(res, 8);
+    }
+
+    #[test]
+    fn expr_constraint_implies_repr() {
+        let vars = (0..5).map(Pos);
+        let constraint = AtMostK { k: 3, lits: vars };
+
+        let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
+
+        let mut solver = Solver::new();
+
+        let repr = solver.varmap().new_var();
+        e.encode_constraint_equals_repr(Some(repr), &mut solver);
+
+        let res = retry_until_unsat(&mut solver, |model| {
+            let a = model.lit(Neg(4)).unwrap();
+            let b = model.lit(Pos(3)).unwrap();
+            let c = model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3;
+
+            if a && b && c {
+                assert!(model.lit_internal(VarType::Unnamed(repr)));
+            }
+        });
+        assert_eq!(res, 32);
     }
 }

@@ -72,7 +72,7 @@ mod tests {
                 m
             });
 
-            model.vars().filter(|v| v.is_pos()).count() <= k as usize
+            assert!(model.vars().filter(|v| v.is_pos()).count() <= k as usize);
         });
         assert_eq!(res, 16);
     }

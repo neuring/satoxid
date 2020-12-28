@@ -166,9 +166,7 @@ mod tests {
         let res = retry_until_unsat(&mut solver, |model| {
             model.print_model();
             if model.lit(lit).unwrap() {
-                model.lit_internal(VarType::Unnamed(repr))
-            } else {
-                true
+                assert!(model.lit_internal(VarType::Unnamed(repr)))
             }
         });
         assert_eq!(res, 2);
@@ -187,9 +185,9 @@ mod tests {
         let res = retry_until_unsat(&mut solver, |model| {
             model.print_model();
             if model.lit(lit).unwrap() {
-                model.lit_internal(VarType::Unnamed(repr))
+                assert!(model.lit_internal(VarType::Unnamed(repr)))
             } else {
-                model.lit_internal(VarType::Unnamed(-repr))
+                assert!(model.lit_internal(VarType::Unnamed(-repr)))
             }
         });
         assert_eq!(res, 2);
@@ -207,9 +205,7 @@ mod tests {
             model.print_model();
 
             if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
-                model.lit_internal(VarType::Unnamed(r))
-            } else {
-                true
+                assert!(model.lit_internal(VarType::Unnamed(r)))
             }
         });
         assert_eq!(res, 64);
@@ -227,9 +223,9 @@ mod tests {
             model.print_model();
 
             if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
-                model.lit_internal(VarType::Unnamed(r))
+                assert!(model.lit_internal(VarType::Unnamed(r)))
             } else {
-                model.lit_internal(VarType::Unnamed(-r))
+                assert!(model.lit_internal(VarType::Unnamed(-r)))
             }
         });
         assert_eq!(res, 64);
@@ -247,9 +243,7 @@ mod tests {
             model.print_model();
 
             if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
-                model.lit_internal(VarType::Unnamed(r))
-            } else {
-                true
+                assert!(model.lit_internal(VarType::Unnamed(r)))
             }
         });
         assert_eq!(res, 64);
@@ -267,9 +261,9 @@ mod tests {
             model.print_model();
 
             if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
-                model.lit_internal(VarType::Unnamed(r))
+                assert!(model.lit_internal(VarType::Unnamed(r)))
             } else {
-                model.lit_internal(VarType::Unnamed(-r))
+                assert!(model.lit_internal(VarType::Unnamed(-r)))
             }
         });
         assert_eq!(res, 64);
