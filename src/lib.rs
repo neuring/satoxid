@@ -6,14 +6,13 @@ use std::{
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
-    ops::{Add, BitAnd, BitOr, Neg},
+    ops::{Add, BitAnd, BitOr, Not},
 };
 
-mod constraints;
+pub mod constraints;
 
 pub mod prelude {
     pub use super::{
-        constraints::Clause,
         Encoder,
         Lit::{self, *},
         Solver,
@@ -21,7 +20,6 @@ pub mod prelude {
 }
 
 use constraints::util::{self, ClauseCollector};
-pub use constraints::{AtMostK, AtleastK, Expr, If};
 
 /// Generic interface for solvers (or Wrapper) to implement.
 pub trait Encoder<V: SatVar>: Sized {
@@ -41,7 +39,7 @@ pub trait Encoder<V: SatVar>: Sized {
 }
 
 /// Trait used to express a constraint.
-/// Constraints represent define a finite set of clauses.
+/// Constraints define a finite set of clauses.
 pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
     /// Encode `Self` as an constraint using `solver`.
     fn encode<E: Encoder<V>>(self, solver: &mut E);
@@ -106,10 +104,10 @@ impl<V> Lit<V> {
     }
 }
 
-impl<V> Neg for Lit<V> {
+impl<V> Not for Lit<V> {
     type Output = Self;
 
-    fn neg(self) -> Self::Output {
+    fn not(self) -> Self::Output {
         match self {
             Lit::Pos(v) => Lit::Neg(v),
             Lit::Neg(v) => Lit::Pos(v),
@@ -265,7 +263,7 @@ impl<V: SatVar> Model<V> {
     }
 }
 
-impl<V: SatVar + Ord + Debug> Model<V> {
+impl<V: SatVar + Ord> Model<V> {
     pub(crate) fn print_model(&self) {
         println!("{:?}", {
             let mut m = self.all_vars().collect::<Vec<_>>();
@@ -275,7 +273,7 @@ impl<V: SatVar + Ord + Debug> Model<V> {
     }
 }
 
-impl<V: SatVar + Debug + Ord> Debug for Model<V> {
+impl<V: SatVar + Ord> Debug for Model<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut model: Vec<_> = self.vars().collect();
         model.sort();

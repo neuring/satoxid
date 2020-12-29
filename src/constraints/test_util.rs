@@ -4,7 +4,7 @@ use crate::{Encoder, Lit, Model, SatVar, Solver};
 
 use super::Clause;
 
-pub fn retry_until_unsat<V: SatVar + Debug + Ord>(
+pub fn retry_until_unsat<V: SatVar + Ord>(
     solver: &mut Solver<V>,
     mut pred: impl FnMut(&Model<V>),
 ) -> usize {

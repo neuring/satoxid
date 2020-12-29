@@ -12,7 +12,7 @@ use super::{Constraint, Encoder, Lit, SatVar, VarMap};
 mod cardinality;
 mod conditional;
 mod expr;
-pub mod util;
+pub(crate) mod util;
 
 #[cfg(test)]
 mod test_util;
@@ -21,6 +21,7 @@ pub use cardinality::{AtMostK, AtleastK};
 pub use conditional::If;
 pub use expr::Expr;
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! clause {
     ($($e:expr),*) => {
@@ -28,14 +29,14 @@ macro_rules! clause {
     }
 }
 
-impl<V: SatVar + Debug> Constraint<V> for Lit<V> {
+impl<V: SatVar> Constraint<V> for Lit<V> {
     fn encode<E: Encoder<V>>(self, solver: &mut E) {
         let var = solver.varmap().add_var(self);
         solver.add_clause(clause!(var));
     }
 }
 
-impl<V: SatVar + Debug> ConstraintRepr<V> for Lit<V> {
+impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
     fn encode_constraint_implies_repr<E: Encoder<V>>(
         self,
         repr: Option<i32>,
@@ -102,7 +103,7 @@ where
 /// Constraint which requires all lits to be true.
 /// In some ways it's the opposite of `Clause`.
 #[derive(Clone)]
-struct And<I>(I);
+pub struct And<I>(I);
 
 impl<V, I> Constraint<V> for And<I>
 where

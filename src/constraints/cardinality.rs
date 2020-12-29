@@ -76,7 +76,7 @@ where
             }
         } else {
             for v in constraint.lits {
-                let v = solver.varmap().add_var(-v);
+                let v = solver.varmap().add_var(!v);
                 solver.add_clause(clause![v]);
             }
         }
@@ -255,7 +255,7 @@ where
 
         f.debug_struct("ExactlyK")
             .field("k", &self.k)
-            .field("vars", &lits)
+            .field("lits", &lits)
             .finish()
     }
 }

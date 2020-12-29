@@ -49,8 +49,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        constraints::{test_util::retry_until_unsat, Clause},
-        AtMostK, Lit, Solver, VarType,
+        constraints::{test_util::retry_until_unsat, Clause, AtMostK},
+        Lit, Solver, VarType,
     };
 
     use super::*;

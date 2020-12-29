@@ -1,7 +1,7 @@
 use std::{
     fmt::{self, Debug},
     iter::once,
-    ops::{BitAnd, BitOr, Neg},
+    ops::{BitAnd, BitOr, Not},
 };
 
 use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap};
@@ -13,7 +13,7 @@ use super::util::ClauseCollector;
 pub enum Expr<V> {
     And(Box<Expr<V>>, Box<Expr<V>>),
     Or(Box<Expr<V>>, Box<Expr<V>>),
-    Neg(Box<Expr<V>>),
+    Not(Box<Expr<V>>),
     Lit(Lit<V>),
     Constraint(ExprConstraint<V>),
 }
@@ -23,7 +23,7 @@ impl<V: Debug> Debug for Expr<V> {
         match self {
             Expr::And(lhs, rhs) => f.debug_tuple("And").field(&lhs).field(&rhs).finish(),
             Expr::Or(lhs, rhs) => f.debug_tuple("Or").field(&lhs).field(&rhs).finish(),
-            Expr::Neg(e) => f.debug_tuple("Neg").field(&e).finish(),
+            Expr::Not(e) => f.debug_tuple("Neg").field(&e).finish(),
             Expr::Lit(lit) => f.debug_tuple("Lit").field(&lit).finish(),
             Expr::Constraint(constraint) => {
                 f.debug_tuple("Constraint").field(&constraint.0).finish()
@@ -58,7 +58,7 @@ impl<V: SatVar> ExprConstraint<V> {
 impl<V: SatVar> Expr<V> {
     pub fn from_constraint<C>(constraint: C) -> Self
     where
-        C: ConstraintRepr<V> + Clone + 'static,
+        C: ConstraintRepr<V> + 'static,
     {
         Self::Constraint(ExprConstraint::new(constraint))
     }
@@ -110,7 +110,7 @@ impl<V: SatVar> Expr<V> {
 
                 new_var
             }
-            Expr::Neg(e) => {
+            Expr::Not(e) => {
                 let new_var = solver.varmap().new_var();
                 let e = e.encode_tree(solver);
                 solver.add_clause(clause!(-e, -new_var));
@@ -156,11 +156,11 @@ impl<V, R: Into<Self>> BitOr<R> for Expr<V> {
     }
 }
 
-impl<V> Neg for Expr<V> {
+impl<V> Not for Expr<V> {
     type Output = Self;
 
-    fn neg(self) -> Self::Output {
-        Self::Neg(Box::new(self))
+    fn not(self) -> Self::Output {
+        Self::Not(Box::new(self))
     }
 }
 
@@ -199,7 +199,7 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{constraints::test_util::retry_until_unsat, prelude::*, AtMostK, VarType};
+    use crate::{constraints::{AtMostK, test_util::retry_until_unsat}, prelude::*, VarType};
 
     use super::*;
 
@@ -239,7 +239,7 @@ mod tests {
     fn expr_neg() {
         let lit = Expr::from(Pos(1));
 
-        let expr = -lit;
+        let expr = !lit;
 
         let mut solver = Solver::new();
 
@@ -253,7 +253,7 @@ mod tests {
     fn expr_combined() {
         let lit = Expr::from(Pos(1));
 
-        let expr = lit.clone() & Pos(2) | -lit & Pos(3);
+        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
         let mut solver = Solver::new();
 
@@ -293,7 +293,7 @@ mod tests {
     fn expr_implies_repr() {
         let lit = Expr::from(Pos(1));
 
-        let expr = lit.clone() & Pos(2) | -lit & Pos(3);
+        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
         let mut solver = Solver::new();
 
@@ -317,7 +317,7 @@ mod tests {
     fn expr_equals_repr() {
         let lit = Expr::from(Pos(1));
 
-        let expr = lit.clone() & Pos(2) | -lit & Pos(3);
+        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
         let mut solver = Solver::new();
 

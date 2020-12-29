@@ -6,7 +6,7 @@ use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap};
 use super::util;
 
 /// Implication constraint.
-/// If all of `cond` are true then the `then` constraint has to be true.
+/// If `cond` is satisfied true then the `then` constraint has to be true.
 #[derive(Debug, Clone)]
 pub struct If<C, T> {
     pub cond: C,  // If condition constraint is true
@@ -28,7 +28,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{AtMostK, constraints::test_util::retry_until_unsat, prelude::*};
+    use crate::{constraints::{AtMostK, test_util::retry_until_unsat}, prelude::*};
 
     use super::*;
 
