@@ -6,7 +6,7 @@ use super::Clause;
 
 pub fn retry_until_unsat<V: SatVar + Debug + Ord>(
     solver: &mut Solver<V>,
-    pred: impl Fn(&Model<V>),
+    mut pred: impl FnMut(&Model<V>),
 ) -> usize {
     let mut counter = 0;
 

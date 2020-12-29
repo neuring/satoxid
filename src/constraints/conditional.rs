@@ -1,81 +1,71 @@
 use core::fmt;
 use std::fmt::Debug;
 
-use crate::{Constraint, Encoder, Lit, SatVar, VarMap};
+use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap};
+
+use super::util;
 
 /// Implication constraint.
 /// If all of `cond` are true then the `then` constraint has to be true.
-#[derive(Clone)]
-pub struct If<I1, C> {
-    pub cond: I1, // if all lits of cond iterator are true
-    pub then: C,  // then this condition has to be true as well.
+#[derive(Debug, Clone)]
+pub struct If<C, T> {
+    pub cond: C,  // If condition constraint is true
+    pub then: T,  // then this condition has to be true as well.
 }
 
-struct IfThenEncoderWrapper<'a, E> {
-    internal: &'a mut E,
-    prefix: Vec<i32>,
-}
-
-impl<'a, V: SatVar, E: Encoder<V>> Encoder<V> for IfThenEncoderWrapper<'a, E> {
-    fn add_clause<I>(&mut self, lits: I)
-    where
-        I: Iterator<Item = i32>,
-    {
-        self.internal
-            .add_clause(lits.chain(self.prefix.iter().copied()));
-    }
-
-    fn varmap(&mut self) -> &mut VarMap<V> {
-        self.internal.varmap()
-    }
-}
-
-impl<V, C, I1> Constraint<V> for If<I1, C>
+impl<V, C, T> Constraint<V> for If<C, T>
 where
-    V: Debug + Clone + SatVar,
-    C: Constraint<V>,
-    I1: Iterator<Item = Lit<V>> + Clone,
+    V: SatVar,
+    C: ConstraintRepr<V>,
+    T: Constraint<V>,
 {
     fn encode<E: Encoder<V>>(self, solver: &mut E) {
-        let prefix = self.cond.map(|lit| solver.varmap().add_var(-lit)).collect();
+        let cond_repr = self.cond.encode_constraint_implies_repr(None, solver);
 
-        let mut solver = IfThenEncoderWrapper {
-            internal: solver,
-            prefix,
-        };
-
-        self.then.encode(&mut solver);
-    }
-}
-
-impl<V: SatVar + Debug, I, C> Debug for If<I, C>
-where
-    I: Iterator<Item = Lit<V>> + Clone,
-    C: Constraint<V>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let lits: Vec<_> = self.cond.clone().collect();
-
-        f.debug_tuple("If").field(&lits).field(&self.then).finish()
+        util::repr_implies_constraint(self.then, cond_repr, solver);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate::{AtMostK, constraints::test_util::retry_until_unsat, prelude::*};
 
     use super::*;
 
-    //#[test]
-    //fn if_then() {
-    //    let mut solver = Solver::new();
+    #[test]
+    fn if_then_simple() {
+        let mut solver = Solver::new();
 
-    //    let cond = Pos(5);
-    //    let then = Pos(6);
+        let cond = Pos(5);
+        let then = Pos(6);
 
-    //    solver.add_constraint(If { cond, then });
+        solver.add_constraint(If { cond, then });
 
-    //    let r = retry_until_unsat(&mut solver, ||);
-    //    assert_eq!(r, 1 + )
-    //}
+        let r = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+            if model.var(5).unwrap() {
+                assert!(model.var(6).unwrap());
+            }
+        });
+        assert_eq!(r, 3);
+    }
+
+    #[test]
+    fn if_then_with_constraints() {
+        let mut solver = Solver::new();
+
+        let cond = AtMostK { k: 2, lits: (1..=5).map(Pos)};
+        let then = AtMostK { k: 2, lits: (3..=7).map(Pos)};
+
+
+        solver.add_constraint(If { cond, then });
+
+        let r = retry_until_unsat(&mut solver, |model| {
+            model.print_model();
+            if (1..=5).filter(|l| model.var(*l).unwrap()).count() <= 2 {
+                assert!((3..=7).filter(|l| model.var(*l).unwrap()).count() <= 2)
+            }
+        });
+        assert_eq!(r, 110 /*TODO: Verify this is correct */);
+    }
 }
