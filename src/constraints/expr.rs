@@ -4,7 +4,7 @@ use std::{
     ops::{BitAnd, BitOr, Not},
 };
 
-use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, VarMap};
+use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap};
 
 use super::util::ClauseCollector;
 
@@ -65,7 +65,7 @@ impl<V: SatVar> Expr<V> {
 }
 
 trait DynConstraint<V>: Debug {
-    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector<V>) -> i32;
+    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector, varmap: &mut VarMap<V>) -> i32;
 
     fn dyn_clone(&self) -> Box<dyn DynConstraint<V>>;
 }
@@ -75,9 +75,9 @@ where
     V: SatVar,
     C: ConstraintRepr<V> + Clone + 'static,
 {
-    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector<V>) -> i32 {
+    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector, varmap: &mut VarMap<V>) -> i32 {
         let this = *self;
-        <Self as ConstraintRepr<V>>::encode_constraint_equals_repr(this, None, solver)
+        <Self as ConstraintRepr<V>>::encode_constraint_equals_repr(this, None, solver, varmap)
     }
 
     fn dyn_clone(&self) -> Box<dyn DynConstraint<V>> {
@@ -86,12 +86,12 @@ where
 }
 
 impl<V: SatVar> Expr<V> {
-    fn encode_tree<E: Encoder<V>>(self, solver: &mut E) -> i32 {
+    fn encode_tree<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) -> i32 {
         match self {
             Expr::Or(lhs, rhs) => {
-                let lhs_var = lhs.encode_tree(solver);
-                let rhs_var = rhs.encode_tree(solver);
-                let new_var = solver.varmap().new_var();
+                let lhs_var = lhs.encode_tree(solver, varmap);
+                let rhs_var = rhs.encode_tree(solver, varmap);
+                let new_var = varmap.new_var();
 
                 solver.add_clause(clause!(-new_var, lhs_var, rhs_var));
                 solver.add_clause(clause!(new_var, -lhs_var));
@@ -100,9 +100,9 @@ impl<V: SatVar> Expr<V> {
                 new_var
             }
             Expr::And(lhs, rhs) => {
-                let lhs_var = lhs.encode_tree(solver);
-                let rhs_var = rhs.encode_tree(solver);
-                let new_var = solver.varmap().new_var();
+                let lhs_var = lhs.encode_tree(solver, varmap);
+                let rhs_var = rhs.encode_tree(solver, varmap);
+                let new_var = varmap.new_var();
 
                 solver.add_clause(clause!(-new_var, lhs_var));
                 solver.add_clause(clause!(-new_var, rhs_var));
@@ -111,16 +111,16 @@ impl<V: SatVar> Expr<V> {
                 new_var
             }
             Expr::Not(e) => {
-                let new_var = solver.varmap().new_var();
-                let e = e.encode_tree(solver);
+                let new_var = varmap.new_var();
+                let e = e.encode_tree(solver, varmap);
                 solver.add_clause(clause!(-e, -new_var));
                 solver.add_clause(clause!(e, new_var));
                 new_var
             }
-            Expr::Lit(e) => solver.varmap().add_var(e),
+            Expr::Lit(e) => varmap.add_var(e),
             Expr::Constraint(constraint) => {
-                let mut collector = ClauseCollector::from(solver.varmap());
-                let repr = constraint.0.encode_repr(&mut collector);
+                let mut collector = ClauseCollector::default();
+                let repr = constraint.0.encode_repr(&mut collector, varmap);
 
                 for cls in collector.clauses {
                     solver.add_clause(cls.into_iter());
@@ -165,19 +165,20 @@ impl<V> Not for Expr<V> {
 }
 
 impl<V: SatVar> Constraint<V> for Expr<V> {
-    fn encode<E: Encoder<V>>(self, solver: &mut E) {
-        let v = self.encode_tree(solver);
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        let v = self.encode_tree(solver, varmap);
         solver.add_clause(clause!(v));
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
-    fn encode_constraint_implies_repr<E: Encoder<V>>(
+    fn encode_constraint_implies_repr<S: Solver>(
         self,
         repr: Option<i32>,
-        solver: &mut E,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
     ) -> i32 {
-        let r = self.encode_tree(solver);
+        let r = self.encode_tree(solver, varmap);
 
         if let Some(repr) = repr {
             solver.add_clause(clause!(repr, -r));
@@ -188,18 +189,23 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         }
     }
 
-    fn encode_constraint_equals_repr<E: Encoder<V>>(
+    fn encode_constraint_equals_repr<S: Solver>(
         self,
         repr: Option<i32>,
-        solver: &mut E,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.encode_constraint_implies_repr(repr, solver)
+        self.encode_constraint_implies_repr(repr, solver, varmap)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{constraints::{AtMostK, test_util::retry_until_unsat}, prelude::*, VarType};
+    use crate::{
+        constraints::{test_util::retry_until_unsat, AtMostK},
+        prelude::*,
+        VarType,
+    };
 
     use super::*;
 
@@ -209,11 +215,11 @@ mod tests {
 
         let expr = lit & Pos(2) & Pos(3);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        solver.add_constraint(expr);
+        encoder.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() == 3)
         });
         assert_eq!(res, 1);
@@ -225,11 +231,11 @@ mod tests {
 
         let expr = lit | Pos(2) | Pos(3);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        solver.add_constraint(expr);
+        encoder.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() > 0);
         });
         assert_eq!(res, 7);
@@ -241,11 +247,11 @@ mod tests {
 
         let expr = !lit;
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        solver.add_constraint(expr);
+        encoder.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut solver, |model| assert!(model.lit(Neg(1)).unwrap()));
+        let res = retry_until_unsat(&mut encoder, |model| assert!(model.lit(Neg(1)).unwrap()));
         assert_eq!(res, 1);
     }
 
@@ -255,11 +261,11 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        solver.add_constraint(expr);
+        encoder.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             let (a, b, c) = (
                 model.var(1).unwrap(),
                 model.var(2).unwrap(),
@@ -277,10 +283,10 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut solver = Solver::new();
-        solver.add_constraint(e);
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        encoder.add_constraint(e);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             assert!(model.lit(Neg(4)).unwrap());
             assert!(model.lit(Pos(3)).unwrap());
 
@@ -295,12 +301,12 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let repr = solver.varmap().new_var();
-        expr.encode_constraint_equals_repr(Some(repr), &mut solver);
+        let repr = encoder.varmap.new_var();
+        expr.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             let (a, b, c) = (
                 model.var(1).unwrap(),
                 model.var(2).unwrap(),
@@ -319,12 +325,12 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let repr = solver.varmap().new_var();
-        expr.encode_constraint_equals_repr(Some(repr), &mut solver);
+        let repr = encoder.varmap.new_var();
+        expr.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             let (a, b, c) = (
                 model.var(1).unwrap(),
                 model.var(2).unwrap(),
@@ -346,12 +352,12 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut solver = Solver::new();
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let repr = solver.varmap().new_var();
-        e.encode_constraint_equals_repr(Some(repr), &mut solver);
+        let repr = encoder.varmap.new_var();
+        e.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut solver, |model| {
+        let res = retry_until_unsat(&mut encoder, |model| {
             let a = model.lit(Neg(4)).unwrap();
             let b = model.lit(Pos(3)).unwrap();
             let c = model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3;

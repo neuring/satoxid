@@ -1,45 +1,36 @@
 use std::marker::PhantomData;
 
-use crate::{clause, Constraint, Encoder, SatVar, VarMap};
+use crate::{clause, Constraint, Encoder, SatVar, Solver, VarMap};
 
-pub struct ClauseCollector<'a, V> {
+#[derive(Default)]
+pub struct ClauseCollector {
     pub clauses: Vec<Vec<i32>>,
-    pub varmap: &'a mut VarMap<V>,
 }
 
-impl<'a, V> From<&'a mut VarMap<V>> for ClauseCollector<'a, V> {
-    fn from(varmap: &'a mut VarMap<V>) -> Self {
-        Self {
-            clauses: Vec::default(),
-            varmap,
-        }
-    }
-}
-
-impl<'a, V: SatVar> Encoder<V> for ClauseCollector<'a, V> {
+impl Solver for ClauseCollector {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,
     {
         self.clauses.push(lits.collect());
     }
-
-    fn varmap(&mut self) -> &mut VarMap<V> {
-        &mut self.varmap
-    }
 }
 
-pub fn repr_implies_constraint<V, C, E>(constraint: C, repr: i32, solver: &mut E)
-where
+pub fn repr_implies_constraint<V, C, S>(
+    constraint: C,
+    repr: i32,
+    solver: &mut S,
+    varmap: &mut VarMap<V>,
+) where
     V: SatVar,
     C: Constraint<V>,
-    E: Encoder<V>,
+    S: Solver,
 {
-    let mut wrapper = ClauseCollector::from(solver.varmap());
+    let mut wrapper = ClauseCollector::default();
 
-    constraint.encode(&mut wrapper);
+    constraint.encode(&mut wrapper, varmap);
 
-    let ClauseCollector { clauses, .. } = wrapper;
+    let clauses = wrapper.clauses;
 
     for clause in &clauses {
         solver.add_clause(clause.iter().copied().chain(clause!(-repr)));
@@ -49,7 +40,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        constraints::{test_util::retry_until_unsat, Clause, AtMostK},
+        constraints::{test_util::retry_until_unsat, AtMostK, Clause},
         Lit, Solver, VarType,
     };
 
@@ -60,18 +51,13 @@ mod tests {
         let k = 2;
         let constraint = AtMostK { k, lits };
 
-        let mut solver = Solver::new();
-        let repr = solver.varmap().new_var();
-        super::repr_implies_constraint(constraint, repr, &mut solver);
-        solver.add_clause(clause![repr]);
+        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let repr = encoder.varmap.new_var();
+        super::repr_implies_constraint(constraint, repr, &mut encoder.solver, &mut encoder.varmap);
+        encoder.solver.add_clause(clause![repr]);
 
-        let res = retry_until_unsat(&mut solver, |model| {
-            println!("{:?}", {
-                let mut m = model.all_vars().collect::<Vec<_>>();
-                m.sort();
-                m
-            });
-
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
             assert!(model.vars().filter(|v| v.is_pos()).count() <= k as usize);
         });
         assert_eq!(res, 16);

@@ -21,28 +21,20 @@ pub mod prelude {
 
 use constraints::util::{self, ClauseCollector};
 
-/// Generic interface for solvers (or Wrapper) to implement.
-pub trait Encoder<V: SatVar>: Sized {
+/// Solver backend abstraction trait.
+pub trait Solver {
     /// Add raw clause as integer SAT variable.
     /// These are usually determined using `VarMap`.
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>;
-
-    /// Return the used `VarMap` of the solver.
-    fn varmap(&mut self) -> &mut VarMap<V>;
-
-    /// Add a constraint.
-    fn add_constraint<C: Constraint<V>>(&mut self, constraint: C) {
-        constraint.encode(self);
-    }
 }
 
 /// Trait used to express a constraint.
 /// Constraints define a finite set of clauses.
 pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
     /// Encode `Self` as an constraint using `solver`.
-    fn encode<E: Encoder<V>>(self, solver: &mut E);
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>);
 }
 
 /// Trait used to express a constraint which can imply another variable,
@@ -57,15 +49,25 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 // If a constraint is however able to express this implication it can implement it.
 pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// Encode if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_implies_repr<E: Encoder<V>>(self, repr: Option<i32>, solver: &mut E) -> i32;
+    fn encode_constraint_implies_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32;
 
     /// Encode if and only if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_equals_repr<E: Encoder<V>>(self, repr: Option<i32>, solver: &mut E) -> i32 {
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
         let clone = self.clone();
 
-        let repr = self.encode_constraint_implies_repr(repr, solver);
+        let repr = self.encode_constraint_implies_repr(repr, solver, varmap);
 
-        util::repr_implies_constraint(clone, repr, solver);
+        util::repr_implies_constraint(clone, repr, solver, varmap);
 
         repr
     }
@@ -120,8 +122,7 @@ pub trait SatVar: Debug + Hash + Eq + Clone {}
 
 impl<V: Hash + Eq + Clone + Debug> SatVar for V {}
 
-/// Mapper from user defined variables and integer sat variables used by the
-/// solver backend.
+/// Mapper from user defined variables and integer sat variables.
 pub struct VarMap<V> {
     forward: HashMap<V, i32>,
     reverse: HashMap<i32, V>,
@@ -288,26 +289,52 @@ pub enum VarType<V> {
     Unnamed(i32),
 }
 
-/// Default Solver implementation using the cadical sat solver.
-pub struct Solver<V> {
-    pub internal: cadical::Solver,
-    varmap: VarMap<V>,
+/// Encoder abstraction using the cadical sat solver by default.
+pub struct Encoder<V, S = cadical::Solver> {
+    pub solver: S,
+    pub varmap: VarMap<V>,
+    debug: bool,
 }
 
-impl<V: SatVar> Solver<V> {
-    /// Creates a new solver.
+impl<V: SatVar, S: Default> Encoder<V, S> {
+    /// Creates a new encoder.
     pub fn new() -> Self {
         Self {
-            internal: cadical::Solver::new(),
+            solver: S::default(),
             varmap: VarMap::default(),
+            debug: false,
         }
     }
 
+    /// Creates a new encoder and will print out every encoded constraint.
+    pub fn with_debug() -> Self {
+        Self {
+            solver: S::default(),
+            varmap: VarMap::default(),
+            debug: true,
+        }
+    }
+}
+
+impl<V, S> Encoder<V, S>
+where
+    V: SatVar,
+    S: Solver,
+{
+    pub fn add_constraint<C: Constraint<V>>(&mut self, constraint: C) {
+        if self.debug {
+            println!("{:#?}", constraint);
+        }
+        constraint.encode(&mut self.solver, &mut self.varmap);
+    }
+}
+
+impl<V: SatVar> Encoder<V, cadical::Solver> {
     /// Solve the encoded problem.
     /// If problem is unsat then `None` is returned.
     /// Otherwise a model of the problem is returned.
     pub fn solve(&mut self) -> Option<Model<V>> {
-        let result = self.internal.solve();
+        let result = self.solver.solve();
 
         if let Some(true) = result {
             let assignments = self
@@ -315,7 +342,7 @@ impl<V: SatVar> Solver<V> {
                 .iter_internal_vars()
                 .map(|v| {
                     let v = v as i32;
-                    let assignment = self.internal.value(v).unwrap_or(true);
+                    let assignment = self.solver.value(v).unwrap_or(true);
 
                     if let Some(var) = self.varmap.lookup(v) {
                         let var = var.unwrap();
@@ -338,7 +365,7 @@ impl<V: SatVar> Solver<V> {
     }
 }
 
-impl<V: SatVar> Encoder<V> for Solver<V> {
+impl Solver for cadical::Solver {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,
@@ -347,47 +374,6 @@ impl<V: SatVar> Encoder<V> for Solver<V> {
         let mut lits: Vec<_> = lits.collect();
         lits.sort();
         println!("{:?}", lits);
-        self.internal.add_clause(lits.into_iter());
-    }
-
-    fn varmap(&mut self) -> &mut VarMap<V> {
-        &mut self.varmap
-    }
-}
-
-/// Helper Encoder implementation which prints out the added constraints to stdout.
-/// It has the same API as `Solver` but will panic if `solve` is called because
-/// it doesn't encode anything.
-/// Its purpose is to allow for easy insight on what constraints are getting encoded.
-#[derive(Debug)]
-pub struct DebugSolver<V>(VarMap<V>);
-
-impl<V> DebugSolver<V> {
-    /// Creates new instance of `DebugSolver`.
-    pub fn new() -> Self {
-        Self(Default::default())
-    }
-
-    /// Function for API parity with `Solver`.
-    /// #Panics
-    /// Always
-    pub fn solve(&mut self) -> Option<Model<V>> {
-        panic!("Cannot solve a DebugSolver");
-    }
-}
-
-impl<V: SatVar> Encoder<V> for DebugSolver<V> {
-    fn add_clause<I>(&mut self, lits: I)
-    where
-        I: Iterator<Item = i32>,
-    {
-    }
-
-    fn varmap(&mut self) -> &mut VarMap<V> {
-        &mut self.0
-    }
-
-    fn add_constraint<C: Constraint<V>>(&mut self, constraint: C) {
-        dbg!(constraint);
+        self.add_clause(lits.into_iter());
     }
 }
