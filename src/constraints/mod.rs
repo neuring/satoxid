@@ -132,8 +132,8 @@ where
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
-        let vars = self.0.map(|l| varmap.add_var(l));
-        solver.add_clause(vars.chain(clause![-repr]));
+        let vars = self.0.map(|l| -varmap.add_var(l));
+        solver.add_clause(vars.chain(clause![repr]));
 
         repr
     }
@@ -154,7 +154,12 @@ where
 mod tests {
     use crate::{ConstraintRepr, Encoder, Lit, Solver, VarType};
 
-    use super::{test_util::retry_until_unsat, *};
+    use super::{
+        test_util::{
+            constraint_equals_repr_tester, constraint_implies_repr_tester, retry_until_unsat,
+        },
+        *,
+    };
 
     #[test]
     fn lit_implies_repr() {
@@ -170,13 +175,10 @@ mod tests {
         );
         assert_eq!(repr, r);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-            if model.lit(lit).unwrap() {
-                assert!(model.lit_internal(VarType::Unnamed(repr)))
-            }
-        });
-        assert_eq!(res, 2);
+        let res =
+            constraint_implies_repr_tester(&mut encoder, repr, |model| model.lit(lit).unwrap());
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), 2);
     }
 
     #[test]
@@ -190,84 +192,72 @@ mod tests {
             lit.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
         assert_eq!(repr, r);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-            if model.lit(lit).unwrap() {
-                assert!(model.lit_internal(VarType::Unnamed(repr)))
-            } else {
-                assert!(model.lit_internal(VarType::Unnamed(-repr)))
-            }
-        });
-        assert_eq!(res, 2);
+        let res = constraint_equals_repr_tester(&mut encoder, r, |model| model.lit(lit).unwrap());
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), 2);
     }
 
     #[test]
     fn clause_implies_repr() {
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let clause = Clause((1..=6).map(Lit::Pos));
+        let range = 6;
+        let clause = Clause((1..=range).map(Lit::Pos));
 
         let r =
             clause.encode_constraint_implies_repr(None, &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-
-            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
-                assert!(model.lit_internal(VarType::Unnamed(r)))
-            }
+        let res = constraint_implies_repr_tester(&mut encoder, r, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0
         });
-        assert_eq!(res, 64);
+        assert_eq!(res.correct, (1 << range) - 1);
+        assert_eq!(res.total(), (1 << range));
     }
 
     #[test]
     fn clause_equals_repr() {
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let clause = Clause((1..=6).map(Lit::Pos));
+        let range = 6;
+        let clause = Clause((1..=range).map(Lit::Pos));
 
         let r =
             clause.encode_constraint_equals_repr(None, &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-
-            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0 {
-                assert!(model.lit_internal(VarType::Unnamed(r)))
-            } else {
-                assert!(model.lit_internal(VarType::Unnamed(-r)))
-            }
+        let res = constraint_equals_repr_tester(&mut encoder, r, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() > 0
         });
-        assert_eq!(res, 64);
+        assert_eq!(res.correct, (1 << range) - 1);
+        assert_eq!(res.total(), (1 << range));
     }
 
     #[test]
     fn and_implies_repr() {
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let constraint = And((1..=6).map(Lit::Pos));
+        let range = 6;
+        let constraint = And((1..=range).map(Lit::Pos));
 
         let r = constraint.encode_constraint_implies_repr(
             None,
             &mut encoder.solver,
             &mut encoder.varmap,
         );
+        dbg!(r);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-
-            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
-                assert!(model.lit_internal(VarType::Unnamed(r)))
-            }
+        let res = constraint_implies_repr_tester(&mut encoder, r, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == range
         });
-        assert_eq!(res, 64);
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), (1 << range));
     }
 
     #[test]
     fn and_equals_repr() {
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
-        let constraint = And((1..=6).map(Lit::Pos));
+        let range = 6;
+        let constraint = And((1..=range).map(Lit::Pos));
 
         let r = constraint.encode_constraint_equals_repr(
             None,
@@ -275,15 +265,10 @@ mod tests {
             &mut encoder.varmap,
         );
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            model.print_model();
-
-            if model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == 6 {
-                assert!(model.lit_internal(VarType::Unnamed(r)))
-            } else {
-                assert!(model.lit_internal(VarType::Unnamed(-r)))
-            }
+        let res = constraint_equals_repr_tester(&mut encoder, r, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == range
         });
-        assert_eq!(res, 64);
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), (1 << range));
     }
 }

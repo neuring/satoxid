@@ -180,13 +180,13 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
     ) -> i32 {
         let r = self.encode_tree(solver, varmap);
 
-        if let Some(repr) = repr {
-            solver.add_clause(clause!(repr, -r));
-            solver.add_clause(clause!(-repr, r));
-            repr
-        } else {
-            r
-        }
+        // Since `r` is always equal to the satisfiability of the expression,
+        // we need to always use a new repr and form an implication.
+        let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+        solver.add_clause(clause!(-r, repr));
+
+        repr
     }
 
     fn encode_constraint_equals_repr<S: Solver>(
@@ -195,17 +195,23 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.encode_constraint_implies_repr(repr, solver, varmap)
+        let r = self.encode_tree(solver, varmap);
+
+        if let Some(repr) = repr {
+            solver.add_clause(clause!(repr, -r));
+            solver.add_clause(clause!(-repr, r));
+            repr
+        } else {
+            r
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        constraints::{test_util::retry_until_unsat, AtMostK},
-        prelude::*,
-        VarType,
-    };
+    use num_integer::binomial;
+
+    use crate::{VarType, constraints::{AtMostK, test_util::{constraint_equals_repr_tester, constraint_implies_repr_tester, retry_until_unsat}}, prelude::*};
 
     use super::*;
 
@@ -304,19 +310,18 @@ mod tests {
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
         let repr = encoder.varmap.new_var();
-        expr.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
+        expr.encode_constraint_implies_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let (a, b, c) = (
                 model.var(1).unwrap(),
                 model.var(2).unwrap(),
                 model.var(3).unwrap(),
             );
-            if a && b || !a && c {
-                assert!(model.lit_internal(VarType::Unnamed(repr)));
-            }
+            a && b || !a && c
         });
-        assert_eq!(res, 8);
+        assert_eq!(res.correct, 4);
+        assert_eq!(res.total(), 8);
     }
 
     #[test]
@@ -330,42 +335,40 @@ mod tests {
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
             let (a, b, c) = (
                 model.var(1).unwrap(),
                 model.var(2).unwrap(),
                 model.var(3).unwrap(),
             );
-            if a && b || !a && c {
-                assert!(model.lit_internal(VarType::Unnamed(repr)));
-            } else {
-                assert!(model.lit_internal(VarType::Unnamed(-repr)));
-            }
+            a && b || !a && c
         });
-        assert_eq!(res, 8);
+        assert_eq!(res.correct, 4);
+        assert_eq!(res.total(), 8);
     }
 
     #[test]
     fn expr_constraint_implies_repr() {
-        let vars = (0..5).map(Pos);
-        let constraint = AtMostK { k: 3, lits: vars };
+        let range = 5;
+        let k = 3;
+        let vars = (0..range).map(Pos);
+        let constraint = AtMostK { k, lits: vars };
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
         let mut encoder = Encoder::<_, cadical::Solver>::new();
 
         let repr = encoder.varmap.new_var();
-        e.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
+        e.encode_constraint_implies_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
 
-        let res = retry_until_unsat(&mut encoder, |model| {
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let a = model.lit(Neg(4)).unwrap();
             let b = model.lit(Pos(3)).unwrap();
             let c = model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3;
 
-            if a && b && c {
-                assert!(model.lit_internal(VarType::Unnamed(repr)));
-            }
+            a && b && c
         });
-        assert_eq!(res, 32);
+        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(3, i)).sum());
+        assert_eq!(res.total(), 1 << 5)
     }
 }

@@ -13,11 +13,14 @@ pub mod constraints;
 
 pub mod prelude {
     pub use super::{
+        DefaultEncoder,
         Encoder,
         Lit::{self, *},
         Solver,
     };
 }
+
+mod circuit;
 
 use constraints::util::{self, ClauseCollector};
 
@@ -39,6 +42,13 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 
 /// Trait used to express a constraint which can imply another variable,
 /// a so called representative (repr).
+/// If no repr is supplied (`None`) then the methods have to choose their own repr.
+/// It can either be newly generated using `varmap`, but sometimes the structure of the
+/// constraint provides a suitable candidate.
+/// The used repr is returned by the methods.
+/// If a repr was provided when calling the methods the same repr has to be returned.
+/// If the constraint isn't satisified the whole encoding has to be satisfiable with
+/// no matter what value repr is.
 // We need this trait because we cannot generally express the implication of a constraint
 // to a repr.
 // For example if we take all clauses of an AtMostK constraint the input lits
@@ -293,8 +303,10 @@ pub enum VarType<V> {
 pub struct Encoder<V, S = cadical::Solver> {
     pub solver: S,
     pub varmap: VarMap<V>,
-    debug: bool,
+    pub debug: bool,
 }
+
+pub type DefaultEncoder<V> = Encoder<V, cadical::Solver>;
 
 impl<V: SatVar, S: Default> Encoder<V, S> {
     /// Creates a new encoder.
@@ -370,10 +382,11 @@ impl Solver for cadical::Solver {
     where
         I: Iterator<Item = i32>,
     {
-        //TODO: remove
+        /*//TODO: remove
         let mut lits: Vec<_> = lits.collect();
         lits.sort();
         println!("{:?}", lits);
+        */
         self.add_clause(lits.into_iter());
     }
 }
