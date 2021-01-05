@@ -6,10 +6,56 @@ use crate::{
     clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
 };
 
-enum EncodeConfig {
-    Normal,
-    ImplRepr(i32),
-    EqualRepr(i32),
+/// Encodes a sequential counter used for all cardinality constraint types.
+/// Returns the k output vars which different constraints can constrain to
+/// achieve their respective behaviour.
+fn encode_cardinality_constraint<V, S, I>(
+    lits: I,
+    k: u32,
+    dir: Direction,
+    solver: &mut S,
+    varmap: &mut VarMap<V>,
+) -> Vec<i32>
+where
+    V: SatVar,
+    S: Solver,
+    I: Iterator<Item = Lit<V>>,
+{
+    assert!(k > 0);
+
+    let mut circuit = Circuit::new(solver, dir);
+
+    let vars: Vec<_> = lits.map(|v| varmap.add_var(v)).collect();
+    let n = vars.len();
+
+    let mut prev_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
+
+    if let Some(&v) = vars.first() {
+        circuit.equal(v, prev_s[0]);
+    } else {
+        panic!("No variables to encode");
+    }
+
+    for &s in prev_s.iter().skip(1) {
+        circuit.set_zero(s);
+    }
+
+    for (i, &v) in vars.iter().enumerate().skip(1) {
+        let new_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
+
+        circuit.or_gate(clause![v, prev_s[0]], new_s[0]);
+
+        for j in 1..(k as usize) {
+            let a = varmap.new_var();
+
+            circuit.and_gate(clause![v, prev_s[j - 1]], a);
+            circuit.or_gate(clause![a, prev_s[j]], new_s[j]);
+        }
+
+        prev_s = new_s;
+    }
+
+    prev_s
 }
 
 /// This constraint encodes the requirement that at most `k` of `lits` variables
@@ -26,7 +72,22 @@ where
     I: Iterator<Item = Lit<V>> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        encode_atmost_k(self, EncodeConfig::Normal, solver, varmap);
+        if self.k == 0 {
+            for v in self.lits {
+                let v = varmap.add_var(v);
+                solver.add_clause(clause![-v]);
+            }
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::InToOut,
+                solver,
+                varmap,
+            );
+
+            solver.add_clause(clause![-out.last().unwrap()]);
+        }
     }
 }
 
@@ -41,10 +102,33 @@ where
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let repr = repr.unwrap_or_else(|| varmap.new_var());
-        // Generate repr for `encode_atmost_k`.
-        encode_atmost_k(self, EncodeConfig::ImplRepr(repr), solver, varmap);
-        repr
+        if self.k == 0 {
+            let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+            let lits = self.lits.map(|lit| varmap.add_var(lit));
+            solver.add_clause(lits.chain(clause![repr]));
+
+            repr
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::OutToIn,
+                solver,
+                varmap,
+            );
+
+            let r = -out.last().unwrap();
+            dbg!(r);
+
+            if let Some(repr) = repr {
+                solver.add_clause(clause![r, repr]);
+                solver.add_clause(clause![-r, -repr]);
+                repr
+            } else {
+                r
+            }
+        }
     }
 
     fn encode_constraint_equals_repr<S: Solver>(
@@ -53,9 +137,38 @@ where
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let repr = repr.unwrap_or_else(|| varmap.new_var());
-        encode_atmost_k(self, EncodeConfig::EqualRepr(repr), solver, varmap);
-        repr
+        if self.k == 0 {
+            let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+            let lits = self.lits.clone().map(|lit| varmap.add_var(lit));
+            solver.add_clause(lits.chain(clause![repr]));
+
+            let lits = self.lits.map(|lit| varmap.add_var(lit));
+            for lit in lits {
+                solver.add_clause(clause![-lit, -repr])
+            }
+
+            repr
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::Both,
+                solver,
+                varmap,
+            );
+
+            let r = -out.last().unwrap();
+            dbg!(r);
+
+            if let Some(repr) = repr {
+                solver.add_clause(clause![r, repr]);
+                solver.add_clause(clause![-r, -repr]);
+                repr
+            } else {
+                r
+            }
+        }
     }
 }
 
@@ -73,119 +186,6 @@ where
     }
 }
 
-/// Encoding AtMostK constraint using Sequential Counter.
-fn encode_atmost_k<V, S, I>(
-    constraint: AtMostK<I>,
-    config: EncodeConfig,
-    solver: &mut S,
-    varmap: &mut VarMap<V>,
-) where
-    V: SatVar,
-    S: Solver,
-    I: Iterator<Item = Lit<V>> + Clone,
-{
-    use EncodeConfig::*;
-
-    let dir = match config {
-        Normal => Direction::InToOut,
-        ImplRepr(_) => Direction::Both,
-        EqualRepr(_) => Direction::Both,
-    };
-
-    let mut circuit = Circuit::new(solver, dir);
-
-    if constraint.k == 0 {
-        match config {
-            EncodeConfig::Normal => {
-                for v in constraint.lits {
-                    let v = varmap.add_var(v);
-                    circuit.set_zero(v);
-                }
-            }
-            EncodeConfig::ImplRepr(repr) => {
-                let lits = constraint.lits.map(|lit| varmap.add_var(lit));
-                circuit.solver.add_clause(lits.chain(clause![repr]));
-            }
-            EncodeConfig::EqualRepr(repr) => {
-                let lits = constraint.lits.clone().map(|lit| varmap.add_var(lit));
-                circuit.solver.add_clause(lits.chain(clause![repr]));
-
-                let lits = constraint.lits.map(|lit| varmap.add_var(lit));
-                for lit in lits {
-                    circuit.solver.add_clause(clause![-lit, -repr])
-                }
-            }
-        }
-
-        return;
-    }
-
-    let vars: Vec<_> = constraint.lits.map(|v| varmap.add_var(v)).collect();
-    let n = vars.len();
-    let k = constraint.k as usize;
-
-    let mut prev_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
-
-    if let Some(&v) = vars.first() {
-        circuit.equal(v, prev_s[0]);
-    } else {
-        return;
-    }
-
-    for &s in prev_s.iter().skip(1) {
-        circuit.set_zero(s);
-    }
-
-    let mut endings_repr = Vec::new();
-    for (i, &v) in vars.iter().enumerate().skip(1) {
-        if i + 1 == n {
-            if matches!(config, ImplRepr(_) | EqualRepr(_)) {
-                let e_repr = varmap.new_var();
-
-                circuit.and_gate(clause![v, prev_s[k - 1]], e_repr);
-
-                endings_repr.push(e_repr);
-            } else {
-                circuit.solver.add_clause(clause!(-v, -prev_s[k - 1]));
-            }
-            break;
-        }
-
-        let new_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
-
-        circuit.or_gate(clause![v, prev_s[0]], new_s[0]);
-
-        for j in 1usize..(k as usize) {
-            let a = varmap.new_var();
-
-            circuit.and_gate(clause![v, prev_s[j - 1]], a);
-            circuit.or_gate(clause![a, prev_s[j]], new_s[j]);
-        }
-
-        if matches!(config, ImplRepr(_) | EqualRepr(_)) {
-            let e_repr = varmap.new_var();
-            circuit.and_gate(clause![v, prev_s[k - 1]], e_repr);
-            endings_repr.push(e_repr);
-        } else {
-            circuit.solver.add_clause(clause!(-v, -prev_s[k - 1]));
-        }
-        prev_s = new_s;
-    }
-
-    if let ImplRepr(repr) = config {
-        circuit
-            .solver
-            .add_clause(endings_repr.iter().copied().chain(clause![repr]));
-    } else if let EqualRepr(repr) = config {
-        circuit
-            .solver
-            .add_clause(endings_repr.iter().copied().chain(clause![repr]));
-        for e_repr in endings_repr {
-            circuit.solver.add_clause(clause![-repr, -e_repr]);
-        }
-    }
-}
-
 /// This constraint encodes the requirement that atleast `k` of `lits` variables
 /// are true.
 #[derive(Clone)]
@@ -200,7 +200,19 @@ where
     I: Iterator<Item = Lit<V>> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        encode_atleast_k(self, EncodeConfig::Normal, solver, varmap);
+        if self.k == 0 {
+            return;
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k,
+                Direction::OutToIn,
+                solver,
+                varmap,
+            );
+
+            solver.add_clause(clause![*out.last().unwrap()]);
+        }
     }
 }
 
@@ -215,95 +227,63 @@ where
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let repr = repr.unwrap_or_else(|| varmap.new_var());
+        if self.k == 0 {
+            let repr = repr.unwrap_or_else(|| varmap.new_var());
 
-        encode_atleast_k(self, EncodeConfig::ImplRepr(repr), solver, varmap);
+            solver.add_clause(clause![repr]);
 
-        repr
+            repr
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k,
+                Direction::InToOut,
+                solver,
+                varmap,
+            );
+
+            let r = *out.last().unwrap();
+
+            if let Some(repr) = repr {
+                solver.add_clause(clause![r, repr]);
+                solver.add_clause(clause![-r, -repr]);
+                repr
+            } else {
+                r
+            }
+        }
     }
 
-    /*fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Solver>(
         self,
         repr: Option<i32>,
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let repr = repr.unwrap_or_else(|| varmap.new_var());
+        if self.k == 0 {
+            let repr = repr.unwrap_or_else(|| varmap.new_var());
 
-        encode_atleast_k(self, EncodeConfig::EqualRepr(repr), solver, varmap);
+            solver.add_clause(clause![repr]);
 
-        repr
-    }*/
-}
+            repr
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k,
+                Direction::Both,
+                solver,
+                varmap,
+            );
 
-/// Encoding AtleastK constraint using Sequential Counter.
-fn encode_atleast_k<V, S, I>(
-    constraint: AtleastK<I>,
-    config: EncodeConfig,
-    solver: &mut S,
-    varmap: &mut VarMap<V>,
-) where
-    V: SatVar,
-    S: Solver,
-    I: Iterator<Item = Lit<V>>,
-{
-    use EncodeConfig::*;
+            let r = *out.last().unwrap();
 
-    if constraint.k == 0 {
-        match config {
-            Normal => {}
-            EqualRepr(repr) | ImplRepr(repr) => solver.add_clause(clause![repr]),
-        }
-        return;
-    }
-
-    let dir = match config {
-        Normal => Direction::OutToIn,
-        ImplRepr(_) => Direction::InToOut,
-        EqualRepr(_) => Direction::Both,
-    };
-
-    let mut circuit = Circuit::new(solver, dir);
-
-    let vars: Vec<_> = constraint.lits.map(|v| varmap.add_var(v)).collect();
-    let n = vars.len();
-    let k = constraint.k as usize;
-
-    let mut prev_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
-
-    if let Some(&v) = vars.first() {
-        circuit.equal(v, prev_s[0]);
-    } else {
-        return;
-    }
-
-    for &s in prev_s.iter().skip(1) {
-        circuit.set_zero(s);
-    }
-
-    for (i, &v) in vars.iter().enumerate().skip(1) {
-        let new_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
-
-        circuit.or_gate(clause![v, prev_s[0]], new_s[0]);
-
-        for j in 1usize..(k as usize) {
-            let a = varmap.new_var();
-
-            circuit.and_gate(clause![v, prev_s[j - 1]], a);
-            circuit.or_gate(clause![a, prev_s[j]], new_s[j]);
-        }
-
-        prev_s = new_s;
-    }
-
-    match config {
-        EncodeConfig::Normal => circuit.solver.add_clause(clause!(prev_s[k - 1])),
-        EncodeConfig::ImplRepr(repr) => {
-            circuit.solver.add_clause(clause![-prev_s[k - 1], repr])
-        }
-        EncodeConfig::EqualRepr(repr) => {
-            circuit.solver.add_clause(clause![-prev_s[k - 1], repr]);
-            circuit.solver.add_clause(clause![prev_s[k - 1], -repr]);
+            if let Some(repr) = repr {
+                solver.add_clause(clause![r, repr]);
+                solver.add_clause(clause![-r, -repr]);
+                repr
+            } else {
+                r
+            }
         }
     }
 }
@@ -322,11 +302,114 @@ where
     }
 }
 
-/// Constraints all elements of `lits` to contain exactly k true variables.
+/// This constraint encodes the requirement that exactly `k` of `lits` variables
+/// are true.
 #[derive(Clone)]
-struct ExactlyK<I> {
-    lits: I,
-    k: u32,
+pub struct ExactlyK<I> {
+    pub lits: I,
+    pub k: u32,
+}
+
+impl<V, I> Constraint<V> for ExactlyK<I>
+where
+    V: SatVar + Clone + Debug,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        if self.k == 0 {
+            for v in self.lits {
+                let v = varmap.add_var(v);
+                solver.add_clause(clause![-v]);
+            }
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::Both,
+                solver,
+                varmap,
+            );
+
+            solver.add_clause(clause![out[out.len() - 2]]);
+            solver.add_clause(clause![-out[out.len() - 1]]);
+        }
+    }
+}
+
+impl<V, I> ConstraintRepr<V> for ExactlyK<I>
+where
+    V: SatVar,
+    I: Iterator<Item = Lit<V>> + Clone,
+{
+    fn encode_constraint_implies_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+        if self.k == 0 {
+
+            let lits = self.lits.map(|lit| varmap.add_var(lit));
+            solver.add_clause(lits.chain(clause![repr]));
+
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::Both,
+                solver,
+                varmap,
+            );
+
+            let r1 = out[out.len() - 2];
+            let r2 = out[out.len() - 1];
+
+            solver.add_clause(clause!(-r1, r2, repr));
+
+        }
+
+        repr
+    }
+
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+        if self.k == 0 {
+
+            let lits = self.lits.clone().map(|lit| varmap.add_var(lit));
+            solver.add_clause(lits.chain(clause![repr]));
+
+            let lits = self.lits.map(|lit| varmap.add_var(lit));
+            for lit in lits {
+                solver.add_clause(clause![-lit, -repr])
+            }
+
+        } else {
+            let out = encode_cardinality_constraint(
+                self.lits,
+                self.k + 1,
+                Direction::Both,
+                solver,
+                varmap,
+            );
+
+            let r1 = out[out.len() - 2];
+            let r2 = out[out.len() - 1];
+
+            solver.add_clause(clause!(-r1, r2, repr));
+            solver.add_clause(clause!(r1, -repr));
+            solver.add_clause(clause!(-r2, -repr));
+
+        }
+            repr
+    }
 }
 
 impl<V: Debug, I> Debug for ExactlyK<I>
@@ -338,7 +421,7 @@ where
 
         f.debug_struct("ExactlyK")
             .field("k", &self.k)
-            .field("lits", &lits)
+            .field("vars", &lits)
             .finish()
     }
 }
@@ -410,7 +493,7 @@ mod tests {
             &mut encoder.solver,
             &mut encoder.varmap,
         );
-        assert!(repr > 0);
+        assert_ne!(repr, 0);
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             model.vars().filter(|l| l.is_pos()).count() <= k as usize
@@ -647,7 +730,7 @@ mod tests {
             &mut encoder.solver,
             &mut encoder.varmap,
         );
-        assert!(repr > 0);
+        assert_ne!(repr, 0);
 
         let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
             model.vars().filter(|l| l.is_pos()).count() >= k as usize
@@ -656,6 +739,146 @@ mod tests {
             res.correct as u32,
             (k..=range).map(|i| binomial(range, i)).sum()
         );
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn normal_exactlyk() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 5;
+        let lits = (0..range).map(|i| Pos(i));
+
+        encoder.add_constraint(ExactlyK { k, lits });
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            assert!(model.vars().filter(|l| l.is_pos()).count() == k as usize)
+        });
+        assert_eq!(res as u32, binomial(range, k));
+    }
+
+    #[test]
+    fn normal_exactly0() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 5;
+        let k = 0;
+        let lits = (0..range).map(Pos);
+
+        for (l1, l2) in lits.clone().zip((range..2 * range).map(Pos)) {
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
+        }
+
+        encoder.add_constraint(ExactlyK { k, lits });
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            assert!(model.vars().filter(|l| l.is_pos()).count() == k as usize)
+        });
+        assert_eq!(res as u32, 1);
+    }
+
+    #[test]
+    fn exactlyk_implies_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 6;
+        let lits = (1..=range).map(|i| Pos(i));
+        let constraint = ExactlyK { k, lits };
+
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+        assert!(repr > 0);
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| l.is_pos()).count() == k as usize
+        });
+        assert_eq!(res.correct as u32, binomial(range, k));
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn exactlyk_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 5;
+        let lits = (1..=range).map(|i| Pos(i));
+        let constraint = ExactlyK { k, lits };
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+        assert!(repr > 0);
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| l.is_pos()).count() == k as usize
+        });
+        assert_eq!(res.correct as u32, binomial(range, k));
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn exactly0_implies_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 0;
+        let lits = (1..=range).map(|i| Pos(i));
+
+        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
+        }
+
+        let constraint = ExactlyK { k, lits };
+
+        let repr = encoder.varmap.new_var();
+        constraint.encode_constraint_implies_repr(
+            Some(repr),
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| l.is_pos()).count() == k as usize
+        });
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn exactly0_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 0;
+        let lits = (1..=range).map(|i| Pos(i));
+
+        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
+        }
+
+        let constraint = ExactlyK { k, lits };
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+        assert_ne!(repr, 0);
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| l.is_pos()).count() == k as usize
+        });
+        assert_eq!(res.correct as u32, 1);
         assert_eq!(res.total(), 1 << range);
     }
 }
