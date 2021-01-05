@@ -210,7 +210,7 @@ where
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    /*fn encode_constraint_equals_repr<S: Solver>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -221,7 +221,7 @@ where
         encode_atleast_k(self, EncodeConfig::EqualRepr(repr), solver, varmap);
 
         repr
-    }
+    }*/
 }
 
 /// Encoding AtleastK constraint using Sequential Counter.
@@ -338,17 +338,10 @@ mod tests {
 
     use num_integer::binomial;
 
-    use crate::{
-        constraints::{
-            test_util::{
+    use crate::{Solver, VarType, constraints::{Clause, Equal, test_util::{
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
-            },
-            Clause,
-        },
-        prelude::*,
-        Solver, VarType,
-    };
+            }}, prelude::*};
 
     use super::*;
 
@@ -495,8 +488,7 @@ mod tests {
         // Otherwise the sat solver has no variables and just returns an empty set as
         // the only solution.
         for (l1, l2) in lits.clone().zip((range..2 * range).map(Pos)) {
-            encoder.add_constraint(Clause(vec![l1, !l2].into_iter()));
-            encoder.add_constraint(Clause(vec![!l1, l2].into_iter()));
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
         encoder.add_constraint(AtleastK { k, lits });
@@ -572,8 +564,7 @@ mod tests {
         let lits = (1..=range).map(|i| Pos(i));
 
         for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
-            encoder.add_constraint(Clause(vec![l1, !l2].into_iter()));
-            encoder.add_constraint(Clause(vec![!l1, l2].into_iter()));
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
         let constraint = AtleastK { k, lits };
