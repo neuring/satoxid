@@ -4,7 +4,9 @@ use std::{
     ops::{BitAnd, BitOr, Not},
 };
 
-use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap};
+use crate::{
+    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
+};
 
 use super::util::ClauseCollector;
 
@@ -21,8 +23,12 @@ pub enum Expr<V> {
 impl<V: Debug> Debug for Expr<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::And(lhs, rhs) => f.debug_tuple("And").field(&lhs).field(&rhs).finish(),
-            Expr::Or(lhs, rhs) => f.debug_tuple("Or").field(&lhs).field(&rhs).finish(),
+            Expr::And(lhs, rhs) => {
+                f.debug_tuple("And").field(&lhs).field(&rhs).finish()
+            }
+            Expr::Or(lhs, rhs) => {
+                f.debug_tuple("Or").field(&lhs).field(&rhs).finish()
+            }
             Expr::Not(e) => f.debug_tuple("Neg").field(&e).finish(),
             Expr::Lit(lit) => f.debug_tuple("Lit").field(&lit).finish(),
             Expr::Constraint(constraint) => {
@@ -65,7 +71,11 @@ impl<V: SatVar> Expr<V> {
 }
 
 trait DynConstraint<V>: Debug {
-    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector, varmap: &mut VarMap<V>) -> i32;
+    fn encode_repr(
+        self: Box<Self>,
+        solver: &mut ClauseCollector,
+        varmap: &mut VarMap<V>,
+    ) -> i32;
 
     fn dyn_clone(&self) -> Box<dyn DynConstraint<V>>;
 }
@@ -75,9 +85,15 @@ where
     V: SatVar,
     C: ConstraintRepr<V> + Clone + 'static,
 {
-    fn encode_repr(self: Box<Self>, solver: &mut ClauseCollector, varmap: &mut VarMap<V>) -> i32 {
+    fn encode_repr(
+        self: Box<Self>,
+        solver: &mut ClauseCollector,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
         let this = *self;
-        <Self as ConstraintRepr<V>>::encode_constraint_equals_repr(this, None, solver, varmap)
+        <Self as ConstraintRepr<V>>::encode_constraint_equals_repr(
+            this, None, solver, varmap,
+        )
     }
 
     fn dyn_clone(&self) -> Box<dyn DynConstraint<V>> {
@@ -211,7 +227,17 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
 mod tests {
     use num_integer::binomial;
 
-    use crate::{VarType, constraints::{AtMostK, test_util::{constraint_equals_repr_tester, constraint_implies_repr_tester, retry_until_unsat}}, prelude::*};
+    use crate::{
+        constraints::{
+            test_util::{
+                constraint_equals_repr_tester, constraint_implies_repr_tester,
+                retry_until_unsat,
+            },
+            AtMostK, AtleastK,
+        },
+        prelude::*,
+        VarType,
+    };
 
     use super::*;
 
@@ -221,7 +247,7 @@ mod tests {
 
         let expr = lit & Pos(2) & Pos(3);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -237,7 +263,7 @@ mod tests {
 
         let expr = lit | Pos(2) | Pos(3);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -253,11 +279,13 @@ mod tests {
 
         let expr = !lit;
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         encoder.add_constraint(expr);
 
-        let res = retry_until_unsat(&mut encoder, |model| assert!(model.lit(Neg(1)).unwrap()));
+        let res = retry_until_unsat(&mut encoder, |model| {
+            assert!(model.lit(Neg(1)).unwrap())
+        });
         assert_eq!(res, 1);
     }
 
@@ -267,7 +295,7 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -289,7 +317,7 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
         encoder.add_constraint(e);
 
         let res = retry_until_unsat(&mut encoder, |model| {
@@ -307,10 +335,14 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         let repr = encoder.varmap.new_var();
-        expr.encode_constraint_implies_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
+        expr.encode_constraint_implies_repr(
+            Some(repr),
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let (a, b, c) = (
@@ -330,10 +362,14 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         let repr = encoder.varmap.new_var();
-        expr.encode_constraint_equals_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
+        expr.encode_constraint_equals_repr(
+            Some(repr),
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
             let (a, b, c) = (
@@ -356,10 +392,14 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = DefaultEncoder::new();
 
         let repr = encoder.varmap.new_var();
-        e.encode_constraint_implies_repr(Some(repr), &mut encoder.solver, &mut encoder.varmap);
+        e.encode_constraint_implies_repr(
+            Some(repr),
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let a = model.lit(Neg(4)).unwrap();
@@ -370,5 +410,35 @@ mod tests {
         });
         assert_eq!(res.correct as u32, (0..k).map(|i| binomial(3, i)).sum());
         assert_eq!(res.total(), 1 << 5)
+    }
+
+    #[test]
+    fn expr_constraint_or() {
+        let range = 4;
+        let vars = (0..range).map(Pos);
+
+        let empty_cond = AtMostK {
+            k: 0,
+            lits: vars.clone(),
+        };
+        let filled_cond = AtleastK { k: 3, lits: vars };
+
+        let e =
+            Expr::from_constraint(filled_cond) | Expr::from_constraint(empty_cond);
+
+        let mut encoder = DefaultEncoder::new();
+
+        encoder.add_constraint(e);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let empty_cond =
+                model.vars().filter(|l| matches!(l, Pos(_))).count() == 0;
+            let filled_cond =
+                model.vars().filter(|l| matches!(l, Pos(_))).count() >= 3;
+
+            assert!(filled_cond | empty_cond);
+        });
+        assert_eq!(res, binomial(4, 0) + binomial(4, 3) + binomial(4, 4));
     }
 }

@@ -82,7 +82,7 @@ fn encode_atmost_k<V, S, I>(
 ) where
     V: SatVar,
     S: Solver,
-    I: Iterator<Item = Lit<V>>,
+    I: Iterator<Item = Lit<V>> + Clone,
 {
     use EncodeConfig::*;
 
@@ -95,13 +95,25 @@ fn encode_atmost_k<V, S, I>(
     let mut circuit = Circuit::new(solver, dir);
 
     if constraint.k == 0 {
-        if let ImplRepr(repr) = config {
-            let lits = constraint.lits.map(|lit| varmap.add_var(lit));
-            circuit.solver.add_clause(lits.chain(clause![repr]));
-        } else {
-            for v in constraint.lits {
-                let v = varmap.add_var(v);
-                circuit.set_zero(v);
+        match config {
+            EncodeConfig::Normal => {
+                for v in constraint.lits {
+                    let v = varmap.add_var(v);
+                    circuit.set_zero(v);
+                }
+            }
+            EncodeConfig::ImplRepr(repr) => {
+                let lits = constraint.lits.map(|lit| varmap.add_var(lit));
+                circuit.solver.add_clause(lits.chain(clause![repr]));
+            }
+            EncodeConfig::EqualRepr(repr) => {
+                let lits = constraint.lits.clone().map(|lit| varmap.add_var(lit));
+                circuit.solver.add_clause(lits.chain(clause![repr]));
+
+                let lits = constraint.lits.map(|lit| varmap.add_var(lit));
+                for lit in lits {
+                    circuit.solver.add_clause(clause![-lit, -repr])
+                }
             }
         }
 
@@ -239,7 +251,7 @@ fn encode_atleast_k<V, S, I>(
 
     if constraint.k == 0 {
         match config {
-            Normal => {},
+            Normal => {}
             EqualRepr(repr) | ImplRepr(repr) => solver.add_clause(clause![repr]),
         }
         return;
@@ -254,7 +266,6 @@ fn encode_atleast_k<V, S, I>(
     let mut circuit = Circuit::new(solver, dir);
 
     let vars: Vec<_> = constraint.lits.map(|v| varmap.add_var(v)).collect();
-    println!("vars = {:?}", vars);
     let n = vars.len();
     let k = constraint.k as usize;
 
@@ -338,10 +349,17 @@ mod tests {
 
     use num_integer::binomial;
 
-    use crate::{Solver, VarType, constraints::{Clause, Equal, test_util::{
+    use crate::{
+        constraints::{
+            test_util::{
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
-            }}, prelude::*};
+            },
+            Clause, Equal,
+        },
+        prelude::*,
+        Solver, VarType,
+    };
 
     use super::*;
 
@@ -452,6 +470,33 @@ mod tests {
             model.vars().filter(|l| l.is_pos()).count() <= k as usize
         });
         assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn atmost0_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 0;
+        let lits = (1..=range).map(|i| Pos(i));
+
+        let constraint = AtMostK { k, lits };
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            model.print_model();
+            model.vars().filter(|l| l.is_pos()).count() <= k as usize
+        });
+        assert_eq!(
+            res.correct as u32,
+            (0..=k).map(|i| binomial(range, i)).sum()
+        );
         assert_eq!(res.total(), 1 << range);
     }
 
@@ -580,6 +625,37 @@ mod tests {
             model.vars().filter(|l| l.is_pos()).count() >= k as usize
         });
         assert_eq!(res.correct, 1 << range);
+        assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn atleast0_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 10;
+        let k = 0;
+        let lits = (1..=range).map(|i| Pos(i));
+
+        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+            encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
+        }
+
+        let constraint = AtleastK { k, lits };
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+        assert!(repr > 0);
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| l.is_pos()).count() >= k as usize
+        });
+        assert_eq!(
+            res.correct as u32,
+            (k..=range).map(|i| binomial(range, i)).sum()
+        );
         assert_eq!(res.total(), 1 << range);
     }
 }
