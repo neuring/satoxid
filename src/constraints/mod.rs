@@ -5,9 +5,8 @@ use std::{
     ops::{BitAnd, BitOr},
 };
 
-use crate::{ConstraintRepr, Solver};
-
 use super::{Constraint, Encoder, Lit, SatVar, VarMap};
+use crate::{ConstraintRepr, Solver};
 
 mod cardinality;
 mod conditional;
@@ -17,7 +16,7 @@ pub(crate) mod util;
 #[cfg(test)]
 mod test_util;
 
-pub use cardinality::{AtMostK, AtleastK};
+pub use cardinality::{AtMostK, AtleastK, ExactlyK, SameCardinality};
 pub use conditional::If;
 pub use expr::Expr;
 
@@ -204,8 +203,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Solver, VarType};
-
     use super::{
         test_util::{
             constraint_equals_repr_tester, constraint_implies_repr_tester,
@@ -213,6 +210,7 @@ mod tests {
         },
         *,
     };
+    use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Solver, VarType};
 
     #[test]
     fn lit_implies_repr() {

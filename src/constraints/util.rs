@@ -39,12 +39,11 @@ pub fn repr_implies_constraint<V, C, S>(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{
         constraints::{test_util::retry_until_unsat, AtMostK, Clause},
         Lit, Solver, VarType,
     };
-
-    use super::*;
     #[test]
     fn repr_implies_constraint() {
         let lits = (1..=5).map(|i| Lit::Pos(i));
@@ -53,7 +52,12 @@ mod tests {
 
         let mut encoder = Encoder::<_, cadical::Solver>::new();
         let repr = encoder.varmap.new_var();
-        super::repr_implies_constraint(constraint, repr, &mut encoder.solver, &mut encoder.varmap);
+        super::repr_implies_constraint(
+            constraint,
+            repr,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
         encoder.solver.add_clause(clause![repr]);
 
         let res = retry_until_unsat(&mut encoder, |model| {

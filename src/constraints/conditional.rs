@@ -1,9 +1,10 @@
 use core::fmt;
 use std::fmt::Debug;
 
-use crate::{clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap};
-
 use super::util;
+use crate::{
+    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
+};
 
 /// Implication constraint.
 /// If `cond` is satisfied true then the `then` constraint has to be true.
@@ -83,9 +84,17 @@ where
 mod tests {
     use num_integer::binomial;
 
-    use crate::{constraints::{AtMostK, test_util::{constraint_equals_repr_tester, constraint_implies_repr_tester, retry_until_unsat}}, prelude::*};
-
     use super::*;
+    use crate::{
+        constraints::{
+            test_util::{
+                constraint_equals_repr_tester, constraint_implies_repr_tester,
+                retry_until_unsat,
+            },
+            AtMostK,
+        },
+        prelude::*,
+    };
 
     #[test]
     fn if_then_simple() {

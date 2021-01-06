@@ -4,11 +4,10 @@ use std::{
     ops::{BitAnd, BitOr, Not},
 };
 
+use super::util::ClauseCollector;
 use crate::{
     clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
 };
-
-use super::util::ClauseCollector;
 
 /// Tseitin Encoding of propositional logic formulas.
 #[derive(Clone)]
@@ -227,6 +226,7 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
 mod tests {
     use num_integer::binomial;
 
+    use super::*;
     use crate::{
         constraints::{
             test_util::{
@@ -238,8 +238,6 @@ mod tests {
         prelude::*,
         VarType,
     };
-
-    use super::*;
 
     #[test]
     fn expr_and() {

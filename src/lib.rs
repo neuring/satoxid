@@ -14,9 +14,7 @@ pub mod constraints;
 pub mod prelude {
     pub use super::{
         DefaultEncoder,
-        Encoder,
         Lit::{self, *},
-        Solver,
     };
 }
 
@@ -299,13 +297,14 @@ pub enum VarType<V> {
     Unnamed(i32),
 }
 
-/// Encoder abstraction using the cadical sat solver by default.
-pub struct Encoder<V, S = cadical::Solver> {
+/// Encoder abstraction.
+pub struct Encoder<V, S> {
     pub solver: S,
     pub varmap: VarMap<V>,
     pub debug: bool,
 }
 
+/// Encoder using the CaDiCal Sat solver.
 pub type DefaultEncoder<V> = Encoder<V, cadical::Solver>;
 
 impl<V: SatVar, S: Default> Encoder<V, S> {

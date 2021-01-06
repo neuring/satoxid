@@ -1,8 +1,8 @@
 use core::fmt;
 use std::{fmt::Debug, iter::once};
 
-use crate::circuit::{Circuit, Direction};
 use crate::{
+    circuit::{Circuit, Direction},
     clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
 };
 
@@ -13,6 +13,7 @@ fn encode_cardinality_constraint<V, S, I>(
     lits: I,
     k: u32,
     dir: Direction,
+    mut out: Option<&[i32]>,
     solver: &mut S,
     varmap: &mut VarMap<V>,
 ) -> Vec<i32>
@@ -22,6 +23,9 @@ where
     I: Iterator<Item = Lit<V>>,
 {
     assert!(k > 0);
+    if let Some(out) = out {
+        assert!(k as usize <= out.len());
+    }
 
     let mut circuit = Circuit::new(solver, dir);
 
@@ -41,7 +45,11 @@ where
     }
 
     for (i, &v) in vars.iter().enumerate().skip(1) {
-        let new_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
+        let new_s: Vec<_> = if i + 1 == vars.len() && out.is_some() {
+            out.unwrap().to_owned()
+        } else {
+            (0..k).map(|_| varmap.new_var()).collect()
+        };
 
         circuit.or_gate(clause![v, prev_s[0]], new_s[0]);
 
@@ -82,6 +90,7 @@ where
                 self.lits,
                 self.k + 1,
                 Direction::InToOut,
+                None,
                 solver,
                 varmap,
             );
@@ -114,6 +123,7 @@ where
                 self.lits,
                 self.k + 1,
                 Direction::OutToIn,
+                None,
                 solver,
                 varmap,
             );
@@ -154,6 +164,7 @@ where
                 self.lits,
                 self.k + 1,
                 Direction::Both,
+                None,
                 solver,
                 varmap,
             );
@@ -207,6 +218,7 @@ where
                 self.lits,
                 self.k,
                 Direction::OutToIn,
+                None,
                 solver,
                 varmap,
             );
@@ -238,6 +250,7 @@ where
                 self.lits,
                 self.k,
                 Direction::InToOut,
+                None,
                 solver,
                 varmap,
             );
@@ -271,6 +284,7 @@ where
                 self.lits,
                 self.k,
                 Direction::Both,
+                None,
                 solver,
                 varmap,
             );
@@ -326,6 +340,7 @@ where
                 self.lits,
                 self.k + 1,
                 Direction::Both,
+                None,
                 solver,
                 varmap,
             );
@@ -350,15 +365,14 @@ where
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
         if self.k == 0 {
-
             let lits = self.lits.map(|lit| varmap.add_var(lit));
             solver.add_clause(lits.chain(clause![repr]));
-
         } else {
             let out = encode_cardinality_constraint(
                 self.lits,
                 self.k + 1,
                 Direction::Both,
+                None,
                 solver,
                 varmap,
             );
@@ -367,7 +381,6 @@ where
             let r2 = out[out.len() - 1];
 
             solver.add_clause(clause!(-r1, r2, repr));
-
         }
 
         repr
@@ -382,7 +395,6 @@ where
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
         if self.k == 0 {
-
             let lits = self.lits.clone().map(|lit| varmap.add_var(lit));
             solver.add_clause(lits.chain(clause![repr]));
 
@@ -390,12 +402,12 @@ where
             for lit in lits {
                 solver.add_clause(clause![-lit, -repr])
             }
-
         } else {
             let out = encode_cardinality_constraint(
                 self.lits,
                 self.k + 1,
                 Direction::Both,
+                None,
                 solver,
                 varmap,
             );
@@ -406,9 +418,8 @@ where
             solver.add_clause(clause!(-r1, r2, repr));
             solver.add_clause(clause!(r1, -repr));
             solver.add_clause(clause!(-r2, -repr));
-
         }
-            repr
+        repr
     }
 }
 
@@ -426,12 +437,152 @@ where
     }
 }
 
+/// Constraint to ensure that several sets of literals have each the same number of true
+/// values.
+#[derive(Clone, Debug)]
+pub struct SameCardinality<V> {
+    lits: Vec<Vec<Lit<V>>>,
+}
+
+impl<V> SameCardinality<V> {
+    pub fn new() -> Self {
+        Self { lits: Vec::new() }
+    }
+
+    pub fn add_lits<I>(&mut self, lits: I) -> &mut Self
+    where
+        I: Iterator<Item = Lit<V>>,
+    {
+        self.lits.push(lits.collect());
+        self
+    }
+}
+
+impl<V: SatVar> Constraint<V> for SameCardinality<V> {
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        if self.lits.is_empty() {
+            return;
+        }
+
+        let max = self.lits.iter().map(|l| l.len()).max().unwrap();
+        let min = self.lits.iter().map(|l| l.len()).min().unwrap();
+
+        let repr: Vec<_> = (0..max).map(|_| varmap.new_var()).collect();
+
+        for v in repr.iter().rev().take(max - min) {
+            solver.add_clause(clause![-v]);
+        }
+
+        for lits in self.lits {
+            let k = lits.len();
+            encode_cardinality_constraint(
+                lits.into_iter(),
+                k as u32,
+                Direction::Both,
+                Some(&repr),
+                solver,
+                varmap,
+            );
+        }
+    }
+}
+
+impl<V: SatVar> ConstraintRepr<V> for SameCardinality<V> {
+    fn encode_constraint_implies_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        encode_same_cardinality_repr(self, repr, solver, varmap, false)
+    }
+
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        encode_same_cardinality_repr(self, repr, solver, varmap, true)
+    }
+}
+
+fn encode_same_cardinality_repr<V: SatVar>(
+    constraint: SameCardinality<V>,
+    repr: Option<i32>,
+    solver: &mut impl Solver,
+    varmap: &mut VarMap<V>,
+    equal: bool,
+) -> i32 {
+    let repr = repr.unwrap_or_else(|| varmap.new_var());
+
+    if constraint.lits.is_empty() {
+        solver.add_clause(clause!(repr));
+        return repr;
+    }
+
+    let max = constraint.lits.iter().map(|l| l.len()).max().unwrap();
+    let min = constraint.lits.iter().map(|l| l.len()).min().unwrap();
+
+    let mut reprs = Vec::new();
+
+    for lits in constraint.lits {
+        let repr: Vec<_> = (0..max).map(|_| varmap.new_var()).collect();
+
+        let k = lits.len();
+
+        for v in repr.iter().rev().take(max - k) {
+            solver.add_clause(clause![-v]);
+        }
+
+        encode_cardinality_constraint(
+            lits.into_iter(),
+            k as u32,
+            Direction::Both,
+            Some(&repr),
+            solver,
+            varmap,
+        );
+
+        reprs.push(repr);
+    }
+
+    let mut equiv_reprs = Vec::new();
+    for i in 0..max {
+        let r = varmap.new_var();
+
+        solver.add_clause(reprs.iter().map(|repr| repr[i]).chain(clause![r]));
+        solver.add_clause(reprs.iter().map(|repr| -repr[i]).chain(clause![r]));
+
+        if equal {
+            for repr_window in reprs.windows(2) {
+                solver.add_clause(clause![
+                    -repr_window[0][i],
+                    repr_window[1][i],
+                    -r
+                ]);
+            }
+            solver.add_clause(clause![-reprs[reprs.len() - 1][i], reprs[0][i], -r]);
+        }
+
+        equiv_reprs.push(r);
+    }
+
+    if equal {
+        for &equiv_repr in &equiv_reprs {
+            solver.add_clause(clause!(-repr, equiv_repr));
+        }
+    }
+    solver.add_clause(equiv_reprs.into_iter().map(|l| -l).chain(clause![repr]));
+
+    repr
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use num_integer::binomial;
 
+    use super::*;
     use crate::{
         constraints::{
             test_util::{
@@ -443,8 +594,6 @@ mod tests {
         prelude::*,
         Solver, VarType,
     };
-
-    use super::*;
 
     #[test]
     fn normal_atmostk() {
@@ -880,5 +1029,296 @@ mod tests {
         });
         assert_eq!(res.correct as u32, 1);
         assert_eq!(res.total(), 1 << range);
+    }
+
+    #[test]
+    fn normal_same_cardinality() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range).map(Pos))
+            .add_lits((range..2 * range).map(Pos));
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range..2 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            assert_eq!(c1, c2);
+        });
+
+        assert_eq!(
+            res as u32,
+            (0..=range).map(|i| binomial(range, i).pow(2)).sum::<u32>()
+        );
+    }
+
+    #[test]
+    fn normal_same_cardinality_different_sizes() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range1: u32 = 3;
+        let range2: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range1).map(Pos))
+            .add_lits((range1..range1 + range2).map(Pos));
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range1).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range1..range1 + range2).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            assert_eq!(c1, c2);
+        });
+
+        assert_eq!(
+            res as u32,
+            (0..=range1)
+                .map(|i| binomial(range1, i) * binomial(range2, i))
+                .sum::<u32>()
+        );
+    }
+
+    #[test]
+    fn normal_same_cardinality_but_more() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 3;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range).map(Pos))
+            .add_lits((range..2 * range).map(Pos))
+            .add_lits((2 * range..3 * range).map(Pos))
+            .add_lits((3 * range..4 * range).map(Pos));
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range..2 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c3 = model
+                .vars()
+                .filter(|l| (2 * range..3 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c4 = model
+                .vars()
+                .filter(|l| (3 * range..4 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            assert_eq!(c1, c2);
+            assert_eq!(c1, c3);
+            assert_eq!(c1, c4);
+        });
+
+        assert_eq!(
+            res as u32,
+            (0..=range).map(|i| binomial(range, i).pow(4)).sum::<u32>()
+        );
+    }
+
+    #[test]
+    fn same_cardinality_implies_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range).map(Pos))
+            .add_lits((range..2 * range).map(Pos));
+
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range..2 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            c1 == c2
+        });
+
+        assert_eq!(
+            res.correct as u32,
+            (0..=range).map(|i| binomial(range, i).pow(2)).sum::<u32>()
+        );
+        assert_eq!(res.total(), 1 << (2 * range));
+    }
+
+    #[test]
+    fn same_cardinality_implies_repr_different_sizes() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range1: u32 = 5;
+        let range2: u32 = 3;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range1).map(Pos))
+            .add_lits((range1..range1 + range2).map(Pos));
+
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range1).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range1..range1 + range2).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            c1 == c2
+        });
+
+        assert_eq!(
+            res.correct as u32,
+            (0..=range2)
+                .map(|i| binomial(range2, i) * binomial(range1, i))
+                .sum::<u32>()
+        );
+        assert_eq!(res.total(), 1 << (range1 + range2));
+    }
+
+    #[test]
+    fn same_cardinality_implies_repr_but_more() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range).map(Pos))
+            .add_lits((range..2 * range).map(Pos))
+            .add_lits((2 * range..3 * range).map(Pos))
+            .add_lits((3 * range..4 * range).map(Pos));
+
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        encoder
+            .solver
+            .write_dimacs(&std::path::PathBuf::from("clauses.dimacs"))
+            .unwrap();
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range..2 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c3 = model
+                .vars()
+                .filter(|l| (2 * range..3 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c4 = model
+                .vars()
+                .filter(|l| (3 * range..4 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            c1 == c2 && c1 == c3 && c1 == c4
+        });
+
+        assert_eq!(
+            res.correct as u32,
+            (0..=range).map(|i| binomial(range, i).pow(4)).sum::<u32>()
+        );
+        assert_eq!(res.total(), 1 << (4 * range));
+    }
+
+    #[test]
+    fn same_cardinality_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range).map(Pos))
+            .add_lits((range..2 * range).map(Pos));
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range..2 * range).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            c1 == c2
+        });
+
+        assert_eq!(
+            res.correct as u32,
+            (0..=range).map(|i| binomial(range, i).pow(2)).sum::<u32>()
+        );
+        assert_eq!(res.total(), 1 << (2 * range));
     }
 }

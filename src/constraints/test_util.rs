@@ -1,11 +1,12 @@
 use std::{collections::HashSet, fmt::Debug, iter::once};
 
-use crate::{clause, Encoder, Lit, Model, SatVar, Solver, VarMap, VarType};
-
 use super::Clause;
+use crate::{
+    clause, DefaultEncoder, Encoder, Lit, Model, SatVar, Solver, VarMap, VarType,
+};
 
 pub fn retry_until_unsat<V: SatVar + Ord>(
-    encoder: &mut Encoder<V>,
+    encoder: &mut DefaultEncoder<V>,
     mut pred: impl FnMut(&Model<V>),
 ) -> usize {
     let mut counter = 0;
@@ -25,7 +26,7 @@ pub fn retry_until_unsat<V: SatVar + Ord>(
     counter
 }
 
-/// Struct which contains 
+/// Struct which contains
 pub struct ConstraintTestResult {
     pub correct: usize,
     pub incorrect: usize,
@@ -43,7 +44,7 @@ impl ConstraintTestResult {
 /// If it doesn't we check if repr could be both true and false.
 /// Returns the number of times the model was true.
 pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
-    encoder: &mut Encoder<V>,
+    encoder: &mut DefaultEncoder<V>,
     repr: i32,
     mut pred: impl FnMut(&Model<V>) -> bool,
 ) -> ConstraintTestResult {
@@ -61,26 +62,37 @@ pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
 
         if pred(&model) {
             let repr_assignment = model.lit_internal(VarType::Unnamed(repr));
-            assert!(repr_assignment);
-            assert!(!internal.solve_with(vars().chain(once(-repr))).unwrap());
+            assert!(
+                repr_assignment,
+                "repr is false, but the constraint is satisified"
+            );
+            assert!(
+                !internal.solve_with(vars().chain(once(-repr))).unwrap(),
+                "repr could be false, for this satisfying model."
+            );
             correct_counter += 1;
         } else {
-
-            assert!(internal.solve_with(vars().chain(once(repr))).unwrap());
-            assert!(internal.solve_with(vars().chain(once(-repr))).unwrap());
+            assert!(
+                internal.solve_with(vars().chain(once(repr))).unwrap(),
+                "The constraint isn't satisified but repr cannot be true."
+            );
+            assert!(
+                internal.solve_with(vars().chain(once(-repr))).unwrap(),
+                "The constraint isn't satisified but repr cannot be false."
+            );
             incorrect_counter += 1;
         }
 
-        let clause: Vec<_> = model
-            .vars()
-            .map(|l| varmap.get_var(!l).unwrap())
-            .collect();
+        let clause: Vec<_> =
+            model.vars().map(|l| varmap.get_var(!l).unwrap()).collect();
 
         encoder.solver.add_clause(clause.into_iter());
-
     }
 
-    ConstraintTestResult {correct: correct_counter, incorrect: incorrect_counter}
+    ConstraintTestResult {
+        correct: correct_counter,
+        incorrect: incorrect_counter,
+    }
 }
 
 /// Test function for ConstraintRepr implementation.
@@ -89,7 +101,7 @@ pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
 /// If it doesn't we check if repr is false and that it cannot be true.
 /// Returns the number of times the model was true.
 pub fn constraint_equals_repr_tester<V: SatVar + Ord>(
-    encoder: &mut Encoder<V>,
+    encoder: &mut DefaultEncoder<V>,
     repr: i32,
     mut pred: impl FnMut(&Model<V>) -> bool,
 ) -> ConstraintTestResult {
@@ -107,24 +119,33 @@ pub fn constraint_equals_repr_tester<V: SatVar + Ord>(
 
         if pred(&model) {
             let repr_assignment = model.lit_internal(VarType::Unnamed(repr));
-            assert!(repr_assignment);
-            assert!(!internal.solve_with(vars().chain(once(-repr))).unwrap());
+            assert!(
+                repr_assignment,
+                "repr is false, but the constraint is satisified"
+            );
+            assert!(
+                !internal.solve_with(vars().chain(once(-repr))).unwrap(),
+                "repr could be false, for this satisfying model."
+            );
             correct_counter += 1;
         } else {
-
-            assert!(!internal.solve_with(vars().chain(once(repr))).unwrap());
-            assert!(internal.solve_with(vars().chain(once(-repr))).unwrap());
+            assert!(
+                !internal.solve_with(vars().chain(once(repr))).unwrap(),
+                "Constraint is not satisified, but repr can be true."
+            );
+            assert!(internal.solve_with(vars().chain(once(-repr))).unwrap(),
+                "Constraint is not satisified and if repr is false the encoding is unsat.");
             incorrect_counter += 1;
         }
 
-        let clause: Vec<_> = model
-            .vars()
-            .map(|l| varmap.get_var(!l).unwrap())
-            .collect();
+        let clause: Vec<_> =
+            model.vars().map(|l| varmap.get_var(!l).unwrap()).collect();
 
         encoder.solver.add_clause(clause.into_iter());
-
     }
 
-    ConstraintTestResult { correct: correct_counter, incorrect: incorrect_counter }
+    ConstraintTestResult {
+        correct: correct_counter,
+        incorrect: incorrect_counter,
+    }
 }
