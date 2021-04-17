@@ -5,9 +5,7 @@ use std::{
 };
 
 use super::util::ClauseCollector;
-use crate::{
-    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
-};
+use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap, VarType, clause};
 
 /// Tseitin Encoding of propositional logic formulas.
 #[derive(Clone)]
@@ -15,7 +13,7 @@ pub enum Expr<V> {
     And(Box<Expr<V>>, Box<Expr<V>>),
     Or(Box<Expr<V>>, Box<Expr<V>>),
     Not(Box<Expr<V>>),
-    Lit(Lit<V>),
+    Lit(VarType<V>),
     Constraint(ExprConstraint<V>),
 }
 
@@ -149,6 +147,12 @@ impl<V: SatVar> Expr<V> {
 
 impl<V> From<Lit<V>> for Expr<V> {
     fn from(v: Lit<V>) -> Self {
+        Self::Lit(VarType::Named(v))
+    }
+}
+
+impl<V> From<VarType<V>> for Expr<V> {
+    fn from(v: VarType<V>) -> Self {
         Self::Lit(v)
     }
 }

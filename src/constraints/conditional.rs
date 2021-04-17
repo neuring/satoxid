@@ -11,7 +11,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct If<C, T> {
     pub cond: C, // If condition constraint is true
-    pub then: T, // then this condition has to be true as well.
+    pub then: T, // then this constraint has to be true as well.
 }
 
 impl<V, C, T> Constraint<V> for If<C, T>

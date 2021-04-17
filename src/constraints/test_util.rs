@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, iter::once};
 
-use super::Clause;
+use super::Or;
 use crate::{
     clause, DefaultEncoder, Encoder, Lit, Model, SatVar, Solver, VarMap, VarType,
 };
@@ -26,7 +26,6 @@ pub fn retry_until_unsat<V: SatVar + Ord>(
     counter
 }
 
-/// Struct which contains
 pub struct ConstraintTestResult {
     pub correct: usize,
     pub incorrect: usize,

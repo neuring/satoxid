@@ -4,12 +4,13 @@ use std::{fmt::Debug, iter::once};
 use crate::{
     circuit::{Circuit, Direction},
     clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
+    VarType,
 };
 
 /// Encodes a sequential counter used for all cardinality constraint types.
 /// Returns the k output vars which different constraints can constrain to
 /// achieve their respective behaviour.
-fn encode_cardinality_constraint<V, S, I>(
+fn encode_cardinality_constraint<V, S, L, I>(
     lits: I,
     k: u32,
     dir: Direction,
@@ -20,7 +21,8 @@ fn encode_cardinality_constraint<V, S, I>(
 where
     V: SatVar,
     S: Solver,
-    I: Iterator<Item = Lit<V>>,
+    I: Iterator<Item = L>,
+    L: Into<VarType<V>>,
 {
     assert!(k > 0);
     if let Some(out) = out {
@@ -74,10 +76,11 @@ pub struct AtMostK<I> {
     pub k: u32,
 }
 
-impl<V, I> Constraint<V> for AtMostK<I>
+impl<V, L, I> Constraint<V> for AtMostK<I>
 where
-    V: SatVar + Clone + Debug,
-    I: Iterator<Item = Lit<V>> + Clone,
+    V: SatVar,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -100,10 +103,11 @@ where
     }
 }
 
-impl<V, I> ConstraintRepr<V> for AtMostK<I>
+impl<V, L, I> ConstraintRepr<V> for AtMostK<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -183,9 +187,10 @@ where
     }
 }
 
-impl<V: Debug, I> Debug for AtMostK<I>
+impl<L: Debug, I> Debug for AtMostK<I>
 where
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -205,10 +210,11 @@ pub struct AtleastK<I> {
     pub k: u32,
 }
 
-impl<V, I> Constraint<V> for AtleastK<I>
+impl<V, L, I> Constraint<V> for AtleastK<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -228,10 +234,11 @@ where
     }
 }
 
-impl<V, I> ConstraintRepr<V> for AtleastK<I>
+impl<V, L, I> ConstraintRepr<V> for AtleastK<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -304,7 +311,7 @@ where
 
 impl<V: Debug, I> Debug for AtleastK<I>
 where
-    I: Iterator<Item = Lit<V>> + Clone,
+    I: Iterator<Item = V> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -324,10 +331,11 @@ pub struct ExactlyK<I> {
     pub k: u32,
 }
 
-impl<V, I> Constraint<V> for ExactlyK<I>
+impl<V, L, I> Constraint<V> for ExactlyK<I>
 where
-    V: SatVar + Clone + Debug,
-    I: Iterator<Item = Lit<V>> + Clone,
+    V: SatVar,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -351,10 +359,11 @@ where
     }
 }
 
-impl<V, I> ConstraintRepr<V> for ExactlyK<I>
+impl<V, L, I> ConstraintRepr<V> for ExactlyK<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -423,9 +432,9 @@ where
     }
 }
 
-impl<V: Debug, I> Debug for ExactlyK<I>
+impl<L: Debug, I> Debug for ExactlyK<I>
 where
-    I: Iterator<Item = Lit<V>> + Clone,
+    I: Iterator<Item = L> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -441,7 +450,7 @@ where
 /// values.
 #[derive(Clone, Debug)]
 pub struct SameCardinality<V> {
-    lits: Vec<Vec<Lit<V>>>,
+    lits: Vec<Vec<VarType<V>>>,
 }
 
 impl<V> SameCardinality<V> {
@@ -449,11 +458,12 @@ impl<V> SameCardinality<V> {
         Self { lits: Vec::new() }
     }
 
-    pub fn add_lits<I>(&mut self, lits: I) -> &mut Self
+    pub fn add_lits<I, L>(&mut self, lits: I) -> &mut Self
     where
-        I: Iterator<Item = Lit<V>>,
+        L: Into<VarType<V>>,
+        I: Iterator<Item = L>,
     {
-        self.lits.push(lits.collect());
+        self.lits.push(lits.map(|l| l.into()).collect());
         self
     }
 }
@@ -578,6 +588,47 @@ fn encode_same_cardinality_repr<V: SatVar>(
     repr
 }
 
+#[derive(Clone)]
+struct LessCardinality<I1, I2> {
+    larger: I1,
+    smaller: I2,
+}
+
+impl<I1, I2, L1, L2, V> Constraint<V> for LessCardinality<I1, I2>
+where
+    V: SatVar,
+    L1: Into<VarType<V>> + Debug,
+    L2: Into<VarType<V>> + Debug,
+    I1: Iterator<Item = L1> + Clone,
+    I2: Iterator<Item = L2> + Clone,
+{
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+
+        let larger = self.larger.collect::<Vec<_>>();
+        let smaller = self.smaller.collect::<Vec<_>>();
+
+        todo!()
+    }
+}
+
+impl<L1, L2, I1, I2> Debug for LessCardinality<I1, I2>
+where
+    L1: Debug,
+    L2: Debug,
+    I1: Iterator<Item = L1> + Clone,
+    I2: Iterator<Item = L2> + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let larger: Vec<_> = self.larger.clone().collect();
+        let smaller: Vec<_> = self.smaller.clone().collect();
+
+        f.debug_struct("LessCardinality")
+            .field("larger", &larger)
+            .field("smaller", &smaller)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use num_integer::binomial;
@@ -589,7 +640,7 @@ mod tests {
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
             },
-            Clause, Equal,
+            Equal, Or,
         },
         prelude::*,
         Solver, VarType,
@@ -1233,7 +1284,7 @@ mod tests {
     fn same_cardinality_implies_repr_but_more() {
         let mut encoder = DefaultEncoder::new();
 
-        let range: u32 = 5;
+        let range: u32 = 3;
 
         let mut constraint = SameCardinality::new();
         constraint
@@ -1247,11 +1298,6 @@ mod tests {
             &mut encoder.solver,
             &mut encoder.varmap,
         );
-
-        encoder
-            .solver
-            .write_dimacs(&std::path::PathBuf::from("clauses.dimacs"))
-            .unwrap();
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let c1 = model
@@ -1320,5 +1366,39 @@ mod tests {
             (0..=range).map(|i| binomial(range, i).pow(2)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << (2 * range));
+    }
+
+    #[test]
+    fn less_cardinality_constraint() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range: u32 = 5;
+
+        let constraint = LessCardinality {
+            larger: (0..range).map(Pos),
+            smaller: (range..2 * range).map(Pos),
+        };
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            let c1 = model
+                .vars()
+                .filter(|v| (0..range).contains(&v.unwrap()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|v| (range..2 * range).contains(&v.unwrap()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            assert!(c1 < c2);
+        });
+        assert_eq!(
+            res as u32,
+            (0..=range)
+                .map(|i| (0..i).map(|i| binomial(range, i)).sum::<u32>())
+                .sum::<u32>()
+        );
     }
 }

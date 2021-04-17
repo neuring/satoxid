@@ -41,7 +41,7 @@ pub fn repr_implies_constraint<V, C, S>(
 mod tests {
     use super::*;
     use crate::{
-        constraints::{test_util::retry_until_unsat, AtMostK, Clause},
+        constraints::{test_util::retry_until_unsat, AtMostK, Or},
         Lit, Solver, VarType,
     };
     #[test]

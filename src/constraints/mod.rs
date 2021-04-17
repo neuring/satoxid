@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{Constraint, Encoder, Lit, SatVar, VarMap};
-use crate::{ConstraintRepr, Solver};
+use crate::{ConstraintRepr, Solver, VarType};
 
 mod cardinality;
 mod conditional;
@@ -42,10 +42,67 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
+        let repr = repr.unwrap_or_else(|| varmap.new_var());
+        let var = varmap.add_var(self);
+
+        solver.add_clause(clause![-var, repr]);
+
+        repr
+    }
+
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+
         let var = varmap.add_var(self);
 
         if let Some(repr) = repr {
             solver.add_clause(clause![-var, repr]);
+            solver.add_clause(clause![var, -repr]);
+            repr
+        } else {
+            var
+        }
+    }
+}
+
+impl<V: SatVar> Constraint<V> for VarType<V> {
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        let var = varmap.add_var(self);
+        solver.add_clause(clause!(var));
+    }
+}
+
+impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
+    fn encode_constraint_implies_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        let repr = repr.unwrap_or_else(|| varmap.new_var());
+        let var = varmap.add_var(self);
+
+        solver.add_clause(clause![-var, repr]);
+
+        repr
+    }
+
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+
+        let var = varmap.add_var(self);
+
+        if let Some(repr) = repr {
+            solver.add_clause(clause![-var, repr]);
+            solver.add_clause(clause![var, -repr]);
             repr
         } else {
             var
@@ -55,22 +112,24 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
 
 /// Constraint which represents a simple clause.
 #[derive(Clone)]
-pub struct Clause<I>(pub I);
+pub struct Or<I>(pub I);
 
-impl<V, I> Constraint<V> for Clause<I>
+impl<I, L, V> Constraint<V> for Or<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        solver.add_clause(self.0.map(|lit| varmap.add_var(lit)));
+        solver.add_clause(self.0.map(|lit| varmap.add_var(lit.into())));
     }
 }
 
-impl<V, I> ConstraintRepr<V> for Clause<I>
+impl<I, L, V> ConstraintRepr<V> for Or<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -90,25 +149,27 @@ where
     }
 }
 
-impl<I, V> Debug for Clause<I>
+impl<I, V> Debug for Or<I>
 where
     V: Debug,
-    I: Iterator<Item = Lit<V>> + Clone,
+    I: Iterator<Item = V> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(self.0.clone()).finish()
+        let list: Vec<_> = self.0.clone().collect();
+        f.debug_tuple("Or").field(&list).finish()
     }
 }
 
 /// Constraint which requires all lits to be true.
 /// In some ways it's the opposite of `Clause`.
 #[derive(Clone)]
-pub struct And<I>(I);
+pub struct And<I>(pub I);
 
-impl<V, I> Constraint<V> for And<I>
+impl<V, L, I> Constraint<V> for And<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         for v in self.0 {
@@ -118,10 +179,11 @@ where
     }
 }
 
-impl<V, I> ConstraintRepr<V> for And<I>
+impl<V, L, I> ConstraintRepr<V> for And<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -141,7 +203,7 @@ where
 impl<I, V> Debug for And<I>
 where
     V: Debug,
-    I: Iterator<Item = Lit<V>> + Clone,
+    I: Iterator<Item = V> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let list: Vec<_> = self.0.clone().collect();
@@ -151,12 +213,13 @@ where
 
 /// Constraint which requires all lits to be same value.
 #[derive(Clone)]
-pub struct Equal<I>(I);
+pub struct Equal<I>(pub I);
 
-impl<V, I> Constraint<V> for Equal<I>
+impl<V, L, I> Constraint<V> for Equal<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let lits: Vec<_> = self.0.map(|l| varmap.add_var(l)).collect();
@@ -169,10 +232,11 @@ where
     }
 }
 
-impl<V, I> ConstraintRepr<V> for Equal<I>
+impl<V, L, I> ConstraintRepr<V> for Equal<I>
 where
     V: SatVar,
-    I: Iterator<Item = Lit<V>> + Clone,
+    L: Into<VarType<V>> + Debug,
+    I: Iterator<Item = L> + Clone,
 {
     fn encode_constraint_implies_repr<S: Solver>(
         self,
@@ -193,11 +257,59 @@ where
 impl<I, V> Debug for Equal<I>
 where
     V: Debug,
-    I: Iterator<Item = Lit<V>> + Clone,
+    I: Iterator<Item = V> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let list: Vec<_> = self.0.clone().collect();
         f.debug_tuple("Equal").field(&list).finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Not<C>(pub C);
+
+impl<V, C> Constraint<V> for Not<C> 
+where V: SatVar,
+      C: ConstraintRepr<V>,
+{
+    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        let repr = self.0.encode_constraint_implies_repr(None, solver, varmap);
+
+        solver.add_clause(clause![-repr]);
+    }
+}
+
+impl<V, C> ConstraintRepr<V> for Not<C> 
+where V: SatVar,
+      C: ConstraintRepr<V>,
+{
+    fn encode_constraint_implies_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        let not_repr = repr.unwrap_or_else(|| varmap.new_var());
+        let repr = self.0.encode_constraint_equals_repr(None, solver, varmap);
+
+        solver.add_clause(clause![repr, not_repr]);
+
+        not_repr
+    }
+
+    fn encode_constraint_equals_repr<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        let not_repr = repr.unwrap_or_else(|| varmap.new_var());
+        let repr = self.0.encode_constraint_equals_repr(None, solver, varmap);
+
+        solver.add_clause(clause![repr, not_repr]);
+        solver.add_clause(clause![-repr, -not_repr]);
+
+        not_repr
     }
 }
 
@@ -212,6 +324,8 @@ mod tests {
     };
     use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Solver, VarType};
 
+    use num_integer::binomial;
+
     #[test]
     fn lit_implies_repr() {
         let mut encoder = DefaultEncoder::new();
@@ -225,6 +339,25 @@ mod tests {
             &mut encoder.varmap,
         );
         assert_eq!(repr, r);
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            model.lit(lit).unwrap()
+        });
+        assert_eq!(res.correct, 1);
+        assert_eq!(res.total(), 2);
+    }
+
+    #[test]
+    fn lit_implies_repr_none() {
+        let mut encoder = DefaultEncoder::new();
+
+        let lit = Lit::Pos(1);
+
+        let repr = lit.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             model.lit(lit).unwrap()
@@ -259,7 +392,7 @@ mod tests {
         let mut encoder = DefaultEncoder::new();
 
         let range = 6;
-        let clause = Clause((1..=range).map(Lit::Pos));
+        let clause = Or((1..=range).map(Lit::Pos));
 
         let r = clause.encode_constraint_implies_repr(
             None,
@@ -279,7 +412,7 @@ mod tests {
         let mut encoder = DefaultEncoder::new();
 
         let range = 6;
-        let clause = Clause((1..=range).map(Lit::Pos));
+        let clause = Or((1..=range).map(Lit::Pos));
 
         let r = clause.encode_constraint_equals_repr(
             None,
@@ -394,5 +527,63 @@ mod tests {
         });
         assert_eq!(res.correct, 2);
         assert_eq!(res.total(), (1 << range));
+    }
+
+    #[test]
+    fn not_constraint() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 6;
+        let k = 3;
+        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+
+        let constraint = Not(constraint);
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            assert!(
+                model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
+            );
+        });
+        assert_eq!(res as u32, (0..k).map(|i| binomial(range, i)).sum());
+    }
+
+    #[test]
+    fn not_implies_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 6;
+        let k = 3;
+        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+
+        let constraint = Not(constraint);
+
+        let repr = constraint.encode_constraint_implies_repr(None, &mut encoder.solver, &mut encoder.varmap);
+
+        let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
+        });
+        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(range, i)).sum());
+        assert_eq!(res.total() as u32, 1 << range);
+    }
+
+    #[test]
+    fn not_equals_repr() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 6;
+        let k = 3;
+        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+
+        let constraint = Not(constraint);
+
+        let repr = constraint.encode_constraint_equals_repr(None, &mut encoder.solver, &mut encoder.varmap);
+
+        let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
+            model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
+        });
+        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(range, i)).sum());
+        assert_eq!(res.total() as u32, 1 << range);
     }
 }

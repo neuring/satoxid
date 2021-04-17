@@ -162,7 +162,14 @@ impl<V: SatVar> VarMap<V> {
     /// If `var` wasn't already used it generates a new SAT variable.
     /// Depending on whether `var` is `Pos` or `Neg` the returned value is
     /// positive or negative.
-    pub fn add_var(&mut self, lit: Lit<V>) -> i32 {
+    pub fn add_var(&mut self, lit: impl Into<VarType<V>>) -> i32 {
+        let lit = lit.into();
+
+        let lit = match lit {
+            VarType::Named(lit) => lit,
+            VarType::Unnamed(i) => return i,
+        };
+
         let (var, pol) = match lit {
             Lit::Pos(v) => (v, 1),
             Lit::Neg(v) => (v, -1),
@@ -183,7 +190,14 @@ impl<V: SatVar> VarMap<V> {
     }
 
     /// Same as `add_var` but it won't insert new `Lit<V>` instead returning `None`.
-    pub fn get_var(&self, lit: Lit<V>) -> Option<i32> {
+    pub fn get_var(&self, lit: impl Into<VarType<V>>) -> Option<i32> {
+        let lit = lit.into();
+
+        let lit = match lit {
+            VarType::Named(lit) => lit,
+            VarType::Unnamed(i) => return Some(i),
+        };
+
         let (var, pol) = match lit {
             Lit::Pos(v) => (v, 1),
             Lit::Neg(v) => (v, -1),
@@ -291,10 +305,36 @@ impl<V: SatVar + Ord> Debug for Model<V> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum VarType<V> {
     Named(Lit<V>),
     Unnamed(i32),
+}
+
+impl<V: fmt::Debug> fmt::Debug for VarType<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VarType::Named(v) => v.fmt(f),
+            VarType::Unnamed(v) => f.debug_tuple("Unnamed").field(v).finish(),
+        }
+    }
+}
+
+impl<V> Not for VarType<V> {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            VarType::Named(v) => VarType::Named(!v),
+            VarType::Unnamed(v) => VarType::Unnamed(-v),
+        }
+    }
+}
+
+impl<V> From<Lit<V>> for VarType<V> {
+    fn from(l: Lit<V>) -> Self {
+        VarType::Named(l)
+    }
 }
 
 /// Encoder abstraction.
@@ -332,11 +372,55 @@ where
     V: SatVar,
     S: Solver,
 {
+
+    /// Encode a constraint.
     pub fn add_constraint<C: Constraint<V>>(&mut self, constraint: C) {
         if self.debug {
             println!("{:#?}", constraint);
         }
         constraint.encode(&mut self.solver, &mut self.varmap);
+    }
+
+    pub fn add_constraint_implies_repr<C: ConstraintRepr<V>>(
+        &mut self,
+        constraint: C,
+    ) -> VarType<V> {
+        if self.debug {
+            print!("{:#?}", constraint);
+        }
+
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut self.solver,
+            &mut self.varmap,
+        );
+
+        if self.debug {
+            println!(" => {}", repr);
+        }
+
+        VarType::Unnamed(repr)
+    }
+
+    pub fn add_constraint_equals_repr<C: ConstraintRepr<V>>(
+        &mut self,
+        constraint: C,
+    ) -> VarType<V> {
+        if self.debug {
+            print!("{:#?}", constraint);
+        }
+
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut self.solver,
+            &mut self.varmap,
+        );
+
+        if self.debug {
+            println!(" == {}", repr);
+        }
+
+        VarType::Unnamed(repr)
     }
 }
 
