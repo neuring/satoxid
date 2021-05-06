@@ -1,5 +1,8 @@
 use core::fmt;
-use std::{fmt::Debug, iter::once};
+use std::{
+    fmt::Debug,
+    iter::{self, once},
+};
 
 use crate::{
     circuit::{Circuit, Direction},
@@ -603,11 +606,43 @@ where
     I2: Iterator<Item = L2> + Clone,
 {
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-
         let larger = self.larger.collect::<Vec<_>>();
-        let smaller = self.smaller.collect::<Vec<_>>();
+        let larger_len = larger.len();
 
-        todo!()
+        let mut smaller = self.smaller.collect::<Vec<_>>();
+        let smaller_len = smaller.len();
+
+        let max = usize::max(larger_len, smaller_len);
+
+        let mut larger_out = encode_cardinality_constraint(
+            larger.into_iter(),
+            larger_len as u32,
+            Direction::Both,
+            None,
+            solver,
+            varmap,
+        );
+
+        let mut smaller_out = encode_cardinality_constraint(
+            smaller.into_iter(),
+            smaller_len as u32,
+            Direction::Both,
+            None,
+            solver,
+            varmap,
+        );
+
+        larger_out
+            .extend(iter::from_fn(|| Some(varmap.new_var())).take(max - larger_len));
+        smaller_out
+            .extend(iter::from_fn(|| Some(varmap.new_var())).take(max - smaller_len));
+
+        for i in 1..max {
+            solver.add_clause(clause!(-smaller_out[i - 1], smaller_out[i], larger_out[i]));
+        }
+
+        solver.add_clause(clause!(*larger_out.first().unwrap()));
+        solver.add_clause(clause!(-*smaller_out.last().unwrap()));
     }
 }
 
@@ -1382,6 +1417,7 @@ mod tests {
         encoder.add_constraint(constraint);
 
         let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
             let c1 = model
                 .vars()
                 .filter(|v| (0..range).contains(&v.unwrap()))
@@ -1392,13 +1428,15 @@ mod tests {
                 .filter(|v| (range..2 * range).contains(&v.unwrap()))
                 .filter(|l| matches!(l, Pos(_)))
                 .count();
-            assert!(c1 < c2);
+            assert!(c1 > c2);
         });
         assert_eq!(
             res as u32,
-            (0..=range)
-                .map(|i| (0..i).map(|i| binomial(range, i)).sum::<u32>())
-                .sum::<u32>()
+            (0..range).map(|i| {
+                let smaller_combs = binomial(range, i);
+
+                smaller_combs * (i+1..=range).map(|i| binomial(range, i)).sum::<u32>()
+            }).sum::<u32>(),
         );
     }
 }
