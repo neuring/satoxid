@@ -16,7 +16,7 @@ pub(crate) mod util;
 #[cfg(test)]
 mod test_util;
 
-pub use cardinality::{AtMostK, AtleastK, ExactlyK, SameCardinality};
+pub use cardinality::{AtMostK, AtleastK, ExactlyK, LessCardinality, SameCardinality};
 pub use conditional::If;
 pub use expr::Expr;
 

@@ -37,6 +37,18 @@ where
     let vars: Vec<_> = lits.map(|v| varmap.add_var(v)).collect();
     let n = vars.len();
 
+    if k == 1 {
+        return if let Some(out) = out {
+            circuit.equal(out[0], vars[0]);
+            for c in out.iter().skip(1) {
+                circuit.solver.add_clause(clause!(-*c));
+            }
+            vec![out[0]]
+        } else {
+            vec![vars[0]]
+        };
+    }
+
     let mut prev_s: Vec<_> = (0..k).map(|_| varmap.new_var()).collect();
 
     if let Some(&v) = vars.first() {
@@ -592,7 +604,7 @@ fn encode_same_cardinality_repr<V: SatVar>(
 }
 
 #[derive(Clone)]
-struct LessCardinality<I1, I2> {
+pub struct LessCardinality<I1, I2> {
     larger: I1,
     smaller: I2,
 }
@@ -617,7 +629,7 @@ where
         let mut larger_out = encode_cardinality_constraint(
             larger.into_iter(),
             larger_len as u32,
-            Direction::Both,
+            Direction::OutToIn,
             None,
             solver,
             varmap,
@@ -626,7 +638,7 @@ where
         let mut smaller_out = encode_cardinality_constraint(
             smaller.into_iter(),
             smaller_len as u32,
-            Direction::Both,
+            Direction::InToOut,
             None,
             solver,
             varmap,
@@ -645,6 +657,18 @@ where
         solver.add_clause(clause!(-*smaller_out.last().unwrap()));
     }
 }
+
+//impl<V: SatVar> ConstraintRepr<V> for LessCardinality<V> {
+//    fn encode_constraint_implies_repr<S: Solver>(
+//        self,
+//        repr: Option<i32>,
+//        solver: &mut S,
+//        varmap: &mut VarMap<V>,
+//    ) -> i32 {
+//        todo!()
+//    }
+//}
+
 
 impl<L1, L2, I1, I2> Debug for LessCardinality<I1, I2>
 where
@@ -712,6 +736,21 @@ mod tests {
             assert!(model.vars().filter(|l| l.is_pos()).count() <= k as usize)
         });
         assert_eq!(models, 1);
+    }
+
+    #[test]
+    fn normal_atmost_one_literal() {
+        let mut encoder = DefaultEncoder::new();
+
+        let lits = std::iter::once(Pos(1));
+        let k = 1;
+
+        encoder.add_constraint(AtMostK { k, lits });
+
+        let models = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+        });
+        assert_eq!(models, 2);
     }
 
     #[test]
@@ -836,6 +875,21 @@ mod tests {
             assert!(model.vars().filter(|l| l.is_pos()).count() >= k as usize)
         });
         assert_eq!(res as u32, (k..=range).map(|i| binomial(range, i)).sum());
+    }
+
+    #[test]
+    fn normal_atleast_one_literal() {
+        let mut encoder = DefaultEncoder::new();
+
+        let k = 1;
+        let lits = std::iter::once(Pos(1));
+
+        encoder.add_constraint(AtleastK { k, lits });
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            assert!(model.var(1).unwrap())
+        });
+        assert_eq!(res, 1);
     }
 
     #[test]
@@ -1148,6 +1202,41 @@ mod tests {
         assert_eq!(
             res as u32,
             (0..=range).map(|i| binomial(range, i).pow(2)).sum::<u32>()
+        );
+    }
+
+    #[test]
+    fn normal_same_cardinality_one_large_size() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range1: u32 = 1;
+        let range2: u32 = 5;
+
+        let mut constraint = SameCardinality::new();
+        constraint
+            .add_lits((0..range1).map(Pos))
+            .add_lits((range1..range1 + range2).map(Pos));
+
+        encoder.add_constraint(constraint);
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let c1 = model
+                .vars()
+                .filter(|l| (0..range1).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            let c2 = model
+                .vars()
+                .filter(|l| (range1..range1 + range2).contains(l.var()))
+                .filter(|l| matches!(l, Pos(_)))
+                .count();
+            assert_eq!(c1, c2);
+        });
+
+        assert_eq!(
+            res as u32,
+            6,
         );
     }
 
