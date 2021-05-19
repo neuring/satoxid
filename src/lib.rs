@@ -232,6 +232,7 @@ impl<V> VarMap<V> {
 }
 
 /// Result of solving.
+#[derive(Clone)]
 pub struct Model<V> {
     assignments: HashSet<VarType<V>>,
 }

@@ -39,13 +39,17 @@ where
 
     if k == 1 {
         return if let Some(out) = out {
-            circuit.equal(out[0], vars[0]);
-            for c in out.iter().skip(1) {
-                circuit.solver.add_clause(clause!(-*c));
+            circuit.or_gate(vars.into_iter(), out[0]);
+
+            for &o in out.iter().skip(1) {
+                circuit.solver.add_clause(clause!(-o));
             }
+
             vec![out[0]]
         } else {
-            vec![vars[0]]
+            let out = varmap.new_var();
+            circuit.or_gate(vars.into_iter(), out);
+            vec![out]
         };
     }
 
@@ -918,6 +922,23 @@ mod tests {
             assert!(model.vars().filter(|l| l.is_pos()).count() >= k as usize)
         });
         assert_eq!(res as u32, 1 << range);
+    }
+
+    #[test]
+    fn normal_atleast1() {
+        let mut encoder = DefaultEncoder::new();
+
+        let range = 5;
+        let k = 1;
+        let lits = (0..range).map(Pos);
+
+        encoder.add_constraint(AtleastK { k, lits });
+
+        let res = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            assert!(model.vars().filter(|l| l.is_pos()).count() >= k as usize)
+        });
+        assert_eq!(res as u32, (1 << range) - 1);
     }
 
     #[test]
