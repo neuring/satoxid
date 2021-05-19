@@ -29,6 +29,8 @@ pub trait Solver {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>;
+
+    fn add_debug_info<D: Debug>(&mut self, debug: D) {}
 }
 
 /// Trait used to express a constraint.
@@ -373,11 +375,18 @@ where
     V: SatVar,
     S: Solver,
 {
+    pub fn with_backend(s: S) -> Self {
+        Self {
+            solver: s,
+            varmap: VarMap::default(),
+            debug: false,
+        }
+    }
 
     /// Encode a constraint.
     pub fn add_constraint<C: Constraint<V>>(&mut self, constraint: C) {
         if self.debug {
-            println!("{:#?}", constraint);
+            self.solver.add_debug_info(&constraint);
         }
         constraint.encode(&mut self.solver, &mut self.varmap);
     }
@@ -387,7 +396,7 @@ where
         constraint: C,
     ) -> VarType<V> {
         if self.debug {
-            print!("{:#?}", constraint);
+            self.solver.add_debug_info(&constraint);
         }
 
         let repr = constraint.encode_constraint_implies_repr(
@@ -397,7 +406,7 @@ where
         );
 
         if self.debug {
-            println!(" => {}", repr);
+            self.solver.add_debug_info(format!(" => {}", repr));
         }
 
         VarType::Unnamed(repr)
@@ -408,7 +417,7 @@ where
         constraint: C,
     ) -> VarType<V> {
         if self.debug {
-            print!("{:#?}", constraint);
+            self.solver.add_debug_info(&constraint);
         }
 
         let repr = constraint.encode_constraint_equals_repr(
@@ -418,7 +427,7 @@ where
         );
 
         if self.debug {
-            println!(" == {}", repr);
+            self.solver.add_debug_info(format!(" == {}", repr));
         }
 
         VarType::Unnamed(repr)
@@ -466,11 +475,75 @@ impl Solver for cadical::Solver {
     where
         I: Iterator<Item = i32>,
     {
-        /*//TODO: remove
-        let mut lits: Vec<_> = lits.collect();
-        lits.sort();
-        println!("{:?}", lits);
-        */
         self.add_clause(lits.into_iter());
+    }
+
+    fn add_debug_info<D: Debug>(&mut self, debug: D) {
+        println!("{:+?}", debug)
+    }
+}
+
+enum DimacsEntry {
+    Clause(Vec<i32>),
+    Comment(String),
+}
+
+#[derive(Default)]
+pub struct DimacsWriter {
+    max_var: i32,
+    data: Vec<DimacsEntry>,
+}
+
+impl DimacsWriter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn write_to(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
+        let clause_count = self
+            .data
+            .iter()
+            .filter(|e| matches!(e, DimacsEntry::Clause(..)))
+            .count();
+
+        writeln!(writer, "p cnf {} {}", self.max_var, clause_count)?;
+
+        for entry in &self.data {
+            match entry {
+                DimacsEntry::Clause(clause) => {
+                    for l in clause {
+                        write!(writer, "{} ", l)?
+                    }
+                    writeln!(writer, "0")?;
+                },
+                DimacsEntry::Comment(s) => {
+                    for line in s.lines() {
+                        writeln!(writer, "c {}", line)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Solver for DimacsWriter {
+    fn add_clause<I>(&mut self, lits: I)
+    where
+        I: Iterator<Item = i32>,
+    {
+        let clause: Vec<_> = lits.collect();
+
+        for &lit in clause.iter() {
+            self.max_var = self.max_var.max(lit.abs());
+        }
+
+        self.data.push(DimacsEntry::Clause(clause));
+    }
+
+    fn add_debug_info<D: Debug>(&mut self, debug: D) {
+        self.data
+            .push(DimacsEntry::Comment(format!("{:#?}", debug)));
     }
 }
