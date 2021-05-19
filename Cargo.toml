@@ -9,3 +9,11 @@ cadical = "0.1.13"
 
 [dev-dependencies]
 num-integer = "0.1.44"
+#Used in examples.
+itertools = "0.10.0"
+structopt = "0.3.21"
+anyhow = "1.0.40"
+
+[[example]]
+name = "sudoku"
+path = "examples/sudoku.rs"
