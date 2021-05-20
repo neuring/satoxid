@@ -11,13 +11,6 @@ use std::{
 
 pub mod constraints;
 
-pub mod prelude {
-    pub use super::{
-        DefaultEncoder,
-        Lit::{self, *},
-    };
-}
-
 mod circuit;
 
 use constraints::util::{self, ClauseCollector};
