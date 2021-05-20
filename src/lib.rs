@@ -10,7 +10,10 @@ pub use varmap::VarMap;
 
 mod backend;
 
-pub use backend::{CadicalEncoder, DimacsWriter};
+pub use backend::DimacsWriter;
+
+#[cfg(feature = "cadical")]
+pub use backend::CadicalEncoder;
 
 use constraints::util;
 

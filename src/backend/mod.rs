@@ -1,6 +1,7 @@
 mod dimacs;
-mod cadical;
-
 pub use dimacs::DimacsWriter;
 
+#[cfg(feature = "cadical")]
+mod cadical;
+#[cfg(feature = "cadical")]
 pub use self::cadical::CadicalEncoder;
