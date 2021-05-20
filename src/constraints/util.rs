@@ -1,13 +1,13 @@
 use std::marker::PhantomData;
 
-use crate::{clause, Constraint, Encoder, SatVar, Solver, VarMap};
+use crate::{clause, Constraint, Encoder, SatVar, Backend, VarMap};
 
 #[derive(Default)]
 pub struct ClauseCollector {
     pub clauses: Vec<Vec<i32>>,
 }
 
-impl Solver for ClauseCollector {
+impl Backend for ClauseCollector {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,
@@ -24,7 +24,7 @@ pub fn repr_implies_constraint<V, C, S>(
 ) where
     V: SatVar,
     C: Constraint<V>,
-    S: Solver,
+    S: Backend,
 {
     let mut wrapper = ClauseCollector::default();
 
@@ -42,7 +42,7 @@ mod tests {
     use super::*;
     use crate::{
         constraints::{test_util::retry_until_unsat, AtMostK, Or},
-        Lit, Solver, VarType,
+        Lit, Backend, VarType,
     };
     #[test]
     fn repr_implies_constraint() {

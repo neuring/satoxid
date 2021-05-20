@@ -1,4 +1,8 @@
-use sat_encoder::{DefaultEncoder, DimacsWriter, Encoder, Lit::Pos, Solver, constraints::{AtleastK, ExactlyK, If, Or}};
+use sat_encoder::{
+    constraints::{AtleastK, ExactlyK, If, Or},
+    Backend, DefaultEncoder, Encoder,
+    Lit::Pos,
+};
 use strum::IntoEnumIterator;
 
 // Implementation of Einstein's Puzzle.
@@ -93,7 +97,7 @@ macro_rules! every_property_value_appears_once {
     };
 }
 
-fn encode_general_rules(encoder: &mut Encoder<House, impl Solver>) {
+fn encode_general_rules(encoder: &mut Encoder<House, impl Backend>) {
     // Every house as exactly one of each of the five properties.
     every_house_has_one_of_each_property!(Color, encoder);
     every_house_has_one_of_each_property!(Nationality, encoder);
@@ -153,7 +157,7 @@ macro_rules! neighbor_if_then_constraint {
     };
 }
 
-fn encode_specific_rules(encoder: &mut Encoder<House, impl Solver>) {
+fn encode_specific_rules(encoder: &mut Encoder<House, impl Backend>) {
     // 1. The Englishman lives in the red house.
     if_then_constraint!(Nationality::English, Color::Red, encoder);
 
@@ -230,7 +234,7 @@ macro_rules! print_property {
                 print!(", {:?}", p);
             }
         }
-    }
+    };
 }
 
 fn main() {

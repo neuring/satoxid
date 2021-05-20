@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use itertools::iproduct;
-use sat_encoder::{DefaultEncoder, Encoder, Lit::Pos, Model, Solver, constraints::{AtleastK, ExactlyK}};
+use sat_encoder::{DefaultEncoder, Encoder, Lit::Pos, Model, Backend, constraints::{AtleastK, ExactlyK}};
 use structopt::StructOpt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -12,7 +12,7 @@ struct Tile {
     value: u32, /* 1..=9 */
 }
 
-fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Solver>) {
+fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
     // Each Tile must have exactly one value
     for (x, y) in iproduct!(0..9, 0..9) {
         let lits = (1..=9).map(|value| Pos(Tile { x, y, value }));

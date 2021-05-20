@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     circuit::{Circuit, Direction},
-    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
+    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap,
     VarType,
 };
 
@@ -23,7 +23,7 @@ fn encode_cardinality_constraint<V, S, L, I>(
 ) -> Vec<i32>
 where
     V: SatVar,
-    S: Solver,
+    S: Backend,
     I: Iterator<Item = L>,
     L: Into<VarType<V>>,
 {
@@ -101,7 +101,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
             for v in self.lits {
                 let v = varmap.add_var(v);
@@ -128,7 +128,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -164,7 +164,7 @@ where
         }
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -235,7 +235,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
             return;
         } else {
@@ -259,7 +259,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -293,7 +293,7 @@ where
         }
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -356,7 +356,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
             for v in self.lits {
                 let v = varmap.add_var(v);
@@ -384,7 +384,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -414,7 +414,7 @@ where
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -488,7 +488,7 @@ impl<V> SameCardinality<V> {
 }
 
 impl<V: SatVar> Constraint<V> for SameCardinality<V> {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.lits.is_empty() {
             return;
         }
@@ -517,7 +517,7 @@ impl<V: SatVar> Constraint<V> for SameCardinality<V> {
 }
 
 impl<V: SatVar> ConstraintRepr<V> for SameCardinality<V> {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -526,7 +526,7 @@ impl<V: SatVar> ConstraintRepr<V> for SameCardinality<V> {
         encode_same_cardinality_repr(self, repr, solver, varmap, false)
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -539,7 +539,7 @@ impl<V: SatVar> ConstraintRepr<V> for SameCardinality<V> {
 fn encode_same_cardinality_repr<V: SatVar>(
     constraint: SameCardinality<V>,
     repr: Option<i32>,
-    solver: &mut impl Solver,
+    solver: &mut impl Backend,
     varmap: &mut VarMap<V>,
     equal: bool,
 ) -> i32 {
@@ -621,7 +621,7 @@ where
     I1: Iterator<Item = L1> + Clone,
     I2: Iterator<Item = L2> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let larger = self.larger.collect::<Vec<_>>();
         let larger_len = larger.len();
 
@@ -706,7 +706,7 @@ mod tests {
             Equal, Or,
         },
         prelude::*,
-        Solver, VarType,
+        Backend, VarType,
     };
 
     #[test]

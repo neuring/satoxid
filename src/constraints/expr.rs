@@ -5,7 +5,7 @@ use std::{
 };
 
 use super::util::ClauseCollector;
-use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap, VarType, clause};
+use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap, VarType, clause};
 
 /// Tseitin Encoding of propositional logic formulas.
 #[derive(Clone)]
@@ -99,7 +99,7 @@ where
 }
 
 impl<V: SatVar> Expr<V> {
-    fn encode_tree<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) -> i32 {
+    fn encode_tree<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) -> i32 {
         match self {
             Expr::Or(lhs, rhs) => {
                 let lhs_var = lhs.encode_tree(solver, varmap);
@@ -184,14 +184,14 @@ impl<V> Not for Expr<V> {
 }
 
 impl<V: SatVar> Constraint<V> for Expr<V> {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let v = self.encode_tree(solver, varmap);
         solver.add_clause(clause!(v));
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -208,7 +208,7 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,

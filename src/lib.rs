@@ -15,8 +15,8 @@ mod circuit;
 
 use constraints::util::{self, ClauseCollector};
 
-/// Solver backend abstraction trait.
-pub trait Solver {
+/// Backend abstraction trait.
+pub trait Backend {
     /// Add raw clause as integer SAT variable.
     /// These are usually determined using `VarMap`.
     fn add_clause<I>(&mut self, lits: I)
@@ -28,11 +28,24 @@ pub trait Solver {
     fn append_debug_info<D: Debug>(&mut self, debug: D) {}
 }
 
+/// A trait for Backends with are capable of solving SAT Problems.
+pub trait Solver: Backend {
+    /// Solve the encoded SAT problem.
+    /// Returns true if the problem is satisfiable.
+    fn solve(&mut self) -> bool;
+
+    /// Returns if the integer SAT variable is true in the model or not.
+    /// 
+    /// This function should panic if solve wasn't called previously or wasn't able to 
+    /// solve the problem.
+    fn value(&self, var: i32) -> bool;
+}
+
 /// Trait used to express a constraint.
 /// Constraints define a finite set of clauses.
 pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
     /// Encode `Self` as an constraint using `solver`.
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>);
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>);
 }
 
 /// Trait used to express a constraint which can imply another variable,
@@ -54,7 +67,7 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 // If a constraint is however able to express this implication it can implement it.
 pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// Encode if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -62,7 +75,7 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     ) -> i32;
 
     /// Encode if and only if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -80,7 +93,7 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// Encode that repr is true if the constraint is satisfied.
     /// No guarantees are given about the constraints of repr if the constraint is false.
     /// Usually it has either the semantics of implies_repr or equals_repr.
-    fn encode_constraint_repr_cheap<S: Solver>(
+    fn encode_constraint_repr_cheap<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -388,7 +401,7 @@ impl<T: fmt::Display> fmt::Debug for DisplayAsDebug<T> {
 impl<V, S> Encoder<V, S>
 where
     V: SatVar,
-    S: Solver,
+    S: Backend,
 {
     pub fn with_backend(s: S) -> Self {
         Self {
@@ -449,20 +462,20 @@ where
     }
 }
 
-impl<V: SatVar> Encoder<V, cadical::Solver> {
+impl<V: SatVar, S: Solver> Encoder<V, S> {
     /// Solve the encoded problem.
     /// If problem is unsat then `None` is returned.
     /// Otherwise a model of the problem is returned.
     pub fn solve(&mut self) -> Option<Model<V>> {
         let result = self.solver.solve();
 
-        if let Some(true) = result {
+        if result {
             let assignments = self
                 .varmap
                 .iter_internal_vars()
                 .map(|v| {
                     let v = v as i32;
-                    let assignment = self.solver.value(v).unwrap_or(true);
+                    let assignment = self.solver.value(v);
 
                     if let Some(var) = self.varmap.lookup(v) {
                         let var = var.unwrap();
@@ -485,7 +498,7 @@ impl<V: SatVar> Encoder<V, cadical::Solver> {
     }
 }
 
-impl Solver for cadical::Solver {
+impl Backend for cadical::Solver {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,
@@ -495,6 +508,16 @@ impl Solver for cadical::Solver {
 
     fn add_debug_info<D: Debug>(&mut self, debug: D) {
         println!("{:+?}", debug)
+    }
+}
+
+impl Solver for cadical::Solver {
+    fn solve(&mut self) -> bool {
+        self.solve().unwrap_or(false)
+    }
+
+    fn value(&self, var: i32) -> bool {
+        self.value(var).unwrap_or(true)
     }
 }
 
@@ -543,7 +566,7 @@ impl DimacsWriter {
     }
 }
 
-impl Solver for DimacsWriter {
+impl Backend for DimacsWriter {
     fn add_clause<I>(&mut self, lits: I)
     where
         I: Iterator<Item = i32>,

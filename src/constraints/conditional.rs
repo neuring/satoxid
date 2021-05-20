@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use super::util;
 use crate::{
-    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Solver, VarMap,
+    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap,
 };
 
 /// Implication constraint.
@@ -20,7 +20,7 @@ where
     C: ConstraintRepr<V>,
     T: Constraint<V>,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let cond_repr = self
             .cond
             .encode_constraint_repr_cheap(None, solver, varmap);
@@ -35,7 +35,7 @@ where
     C: ConstraintRepr<V>,
     T: ConstraintRepr<V>,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -56,7 +56,7 @@ where
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,

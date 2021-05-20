@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{Constraint, Encoder, Lit, SatVar, VarMap};
-use crate::{ConstraintRepr, Solver, VarType};
+use crate::{ConstraintRepr, Backend, VarType};
 
 mod cardinality;
 mod conditional;
@@ -29,14 +29,14 @@ macro_rules! clause {
 }
 
 impl<V: SatVar> Constraint<V> for Lit<V> {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let var = varmap.add_var(self);
         solver.add_clause(clause!(var));
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -50,7 +50,7 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -68,7 +68,7 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
         }
     }
 
-    fn encode_constraint_repr_cheap<S: Solver>(
+    fn encode_constraint_repr_cheap<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -79,14 +79,14 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
 }
 
 impl<V: SatVar> Constraint<V> for VarType<V> {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let var = varmap.add_var(self);
         solver.add_clause(clause!(var));
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -100,7 +100,7 @@ impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -118,7 +118,7 @@ impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
         }
     }
 
-    fn encode_constraint_repr_cheap<S: Solver>(
+    fn encode_constraint_repr_cheap<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -138,7 +138,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         solver.add_clause(self.0.map(|lit| varmap.add_var(lit.into())));
     }
 }
@@ -149,7 +149,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -189,7 +189,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         for v in self.0 {
             let v = varmap.add_var(v);
             solver.add_clause(clause![v]);
@@ -203,7 +203,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -239,7 +239,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let lits: Vec<_> = self.0.map(|l| varmap.add_var(l)).collect();
 
         for l in lits.windows(2) {
@@ -256,7 +256,7 @@ where
     L: Into<VarType<V>> + Debug,
     I: Iterator<Item = L> + Clone,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -290,7 +290,7 @@ impl<V, C> Constraint<V> for Not<C>
 where V: SatVar,
       C: ConstraintRepr<V>,
 {
-    fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let repr = self.0.encode_constraint_implies_repr(None, solver, varmap);
 
         solver.add_clause(clause![-repr]);
@@ -301,7 +301,7 @@ impl<V, C> ConstraintRepr<V> for Not<C>
 where V: SatVar,
       C: ConstraintRepr<V>,
 {
-    fn encode_constraint_implies_repr<S: Solver>(
+    fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -315,7 +315,7 @@ where V: SatVar,
         not_repr
     }
 
-    fn encode_constraint_equals_repr<S: Solver>(
+    fn encode_constraint_equals_repr<S: Backend>(
         self,
         repr: Option<i32>,
         solver: &mut S,
@@ -340,7 +340,7 @@ mod tests {
         },
         *,
     };
-    use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Solver, VarType};
+    use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Backend, VarType};
 
     use num_integer::binomial;
 

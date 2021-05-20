@@ -2,7 +2,7 @@ use std::{collections::HashSet, fmt::Debug, iter::once};
 
 use super::Or;
 use crate::{
-    clause, DefaultEncoder, Encoder, Lit, Model, SatVar, Solver, VarMap, VarType,
+    clause, DefaultEncoder, Encoder, Lit, Model, SatVar, Backend, VarMap, VarType,
 };
 
 pub fn retry_until_unsat<V: SatVar + Ord>(

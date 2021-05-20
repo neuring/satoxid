@@ -1,4 +1,4 @@
-use crate::{clause, Solver};
+use crate::{clause, Backend};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Direction {
@@ -31,7 +31,7 @@ pub struct Circuit<'a, S> {
     pub dir: Direction,
 }
 
-impl<'a, S: Solver> Circuit<'a, S> {
+impl<'a, S: Backend> Circuit<'a, S> {
     /// Construct a new circuit encoded using `solver`.
     pub fn new(solver: &'a mut S, dir: Direction) -> Self {
         Self { solver, dir }
