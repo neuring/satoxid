@@ -13,6 +13,7 @@ num-integer = "0.1.44"
 itertools = "0.10.0"
 structopt = "0.3.21"
 anyhow = "1.0.40"
+strum = { version = "0.20.0", features = ["derive"] }
 
 [[example]]
 name = "sudoku"
