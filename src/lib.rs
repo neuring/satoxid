@@ -31,6 +31,8 @@ pub trait Solver {
         I: Iterator<Item = i32>;
 
     fn add_debug_info<D: Debug>(&mut self, debug: D) {}
+
+    fn append_debug_info<D: Debug>(&mut self, debug: D) {}
 }
 
 /// Trait used to express a constraint.
@@ -382,6 +384,14 @@ impl<V: SatVar, S: Default> Encoder<V, S> {
     }
 }
 
+struct DisplayAsDebug<T>(T);
+
+impl<T: fmt::Display> fmt::Debug for DisplayAsDebug<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <T as fmt::Display>::fmt(&self.0, f)
+    }
+}
+
 impl<V, S> Encoder<V, S>
 where
     V: SatVar,
@@ -418,7 +428,7 @@ where
         );
 
         if self.debug {
-            self.solver.add_debug_info(format!(" => {}", repr));
+            self.solver.append_debug_info(DisplayAsDebug(format!(" => {}", repr)));
         }
 
         VarType::Unnamed(repr)
@@ -439,7 +449,7 @@ where
         );
 
         if self.debug {
-            self.solver.add_debug_info(format!(" == {}", repr));
+            self.solver.append_debug_info(DisplayAsDebug(format!(" == {}", repr)));
         }
 
         VarType::Unnamed(repr)
@@ -557,5 +567,11 @@ impl Solver for DimacsWriter {
     fn add_debug_info<D: Debug>(&mut self, debug: D) {
         self.data
             .push(DimacsEntry::Comment(format!("{:#?}", debug)));
+    }
+
+    fn append_debug_info<D: Debug>(&mut self, debug: D) {
+        if let Some(DimacsEntry::Comment(s)) = self.data.last_mut() {
+            s.push_str(&format!("{:?}", debug));
+        }
     }
 }
