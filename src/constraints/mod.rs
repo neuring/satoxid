@@ -67,6 +67,15 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
             var
         }
     }
+
+    fn encode_constraint_repr_cheap<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.encode_constraint_equals_repr(repr, solver, varmap)
+    }
 }
 
 impl<V: SatVar> Constraint<V> for VarType<V> {
@@ -107,6 +116,15 @@ impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
         } else {
             var
         }
+    }
+
+    fn encode_constraint_repr_cheap<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.encode_constraint_equals_repr(repr, solver, varmap)
     }
 }
 

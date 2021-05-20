@@ -81,6 +81,18 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
 
         repr
     }
+
+    /// Encode that repr is true if the constraint is satisfied.
+    /// No guarantees are given about the constraints of repr if the constraint is false.
+    /// Usually it has either the semantics of implies_repr or equals_repr.
+    fn encode_constraint_repr_cheap<S: Solver>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.encode_constraint_implies_repr(repr, solver, varmap)
+    }
 }
 
 /// Enum to describe the polarity of variables.

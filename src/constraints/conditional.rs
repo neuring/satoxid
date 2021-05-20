@@ -23,7 +23,7 @@ where
     fn encode<S: Solver>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let cond_repr = self
             .cond
-            .encode_constraint_implies_repr(None, solver, varmap);
+            .encode_constraint_repr_cheap(None, solver, varmap);
 
         util::repr_implies_constraint(self.then, cond_repr, solver, varmap);
     }
