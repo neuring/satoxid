@@ -1,12 +1,9 @@
-use std::{collections::HashSet, fmt::Debug, iter::once};
+use std::iter::once;
 
-use super::Or;
-use crate::{
-    clause, DefaultEncoder, Encoder, Lit, Model, SatVar, Backend, VarMap, VarType,
-};
+use crate::{CadicalEncoder, Model, SatVar, VarType};
 
 pub fn retry_until_unsat<V: SatVar + Ord>(
-    encoder: &mut DefaultEncoder<V>,
+    encoder: &mut CadicalEncoder<V>,
     mut pred: impl FnMut(&Model<V>),
 ) -> usize {
     let mut counter = 0;
@@ -43,7 +40,7 @@ impl ConstraintTestResult {
 /// If it doesn't we check if repr could be both true and false.
 /// Returns the number of times the model was true.
 pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
-    encoder: &mut DefaultEncoder<V>,
+    encoder: &mut CadicalEncoder<V>,
     repr: i32,
     mut pred: impl FnMut(&Model<V>) -> bool,
 ) -> ConstraintTestResult {
@@ -100,7 +97,7 @@ pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
 /// If it doesn't we check if repr is false and that it cannot be true.
 /// Returns the number of times the model was true.
 pub fn constraint_equals_repr_tester<V: SatVar + Ord>(
-    encoder: &mut DefaultEncoder<V>,
+    encoder: &mut CadicalEncoder<V>,
     repr: i32,
     mut pred: impl FnMut(&Model<V>) -> bool,
 ) -> ConstraintTestResult {

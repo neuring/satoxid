@@ -1,9 +1,8 @@
-use core::fmt;
 use std::fmt::Debug;
 
 use super::util;
 use crate::{
-    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap,
+    clause, Constraint, ConstraintRepr, SatVar, Backend, VarMap,
 };
 
 /// Implication constraint.
@@ -93,12 +92,13 @@ mod tests {
             },
             AtMostK,
         },
-        prelude::*,
+        CadicalEncoder,
+        Lit::*,
     };
 
     #[test]
     fn if_then_simple() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let cond = Pos(5);
         let then = Pos(6);
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn if_then_with_constraints() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let cond = AtMostK {
             k: 2,
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn if_then_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 5;
         let k = 3;
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn if_then_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 5;
         let k = 3;

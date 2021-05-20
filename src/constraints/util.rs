@@ -1,6 +1,4 @@
-use std::marker::PhantomData;
-
-use crate::{clause, Constraint, Encoder, SatVar, Backend, VarMap};
+use crate::{clause, Constraint, SatVar, Backend, VarMap};
 
 #[derive(Default)]
 pub struct ClauseCollector {
@@ -41,8 +39,9 @@ pub fn repr_implies_constraint<V, C, S>(
 mod tests {
     use super::*;
     use crate::{
-        constraints::{test_util::retry_until_unsat, AtMostK, Or},
-        Lit, Backend, VarType,
+        constraints::{test_util::retry_until_unsat, AtMostK},
+        CadicalEncoder,
+        Lit,
     };
     #[test]
     fn repr_implies_constraint() {
@@ -50,7 +49,7 @@ mod tests {
         let k = 2;
         let constraint = AtMostK { k, lits };
 
-        let mut encoder = Encoder::<_, cadical::Solver>::new();
+        let mut encoder = CadicalEncoder::new();
         let repr = encoder.varmap.new_var();
         super::repr_implies_constraint(
             constraint,

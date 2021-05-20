@@ -1,19 +1,18 @@
-#![allow(unused)]
-
 use core::fmt;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    hash::Hash,
-    marker::PhantomData,
-    ops::{Add, BitAnd, BitOr, Not},
-};
+use std::{collections::HashSet, fmt::Debug, hash::Hash, ops::Not};
 
 pub mod constraints;
 
 mod circuit;
+mod varmap;
 
-use constraints::util::{self, ClauseCollector};
+pub use varmap::VarMap;
+
+mod backend;
+
+pub use backend::{CadicalEncoder, DimacsWriter};
+
+use constraints::util;
 
 /// Backend abstraction trait.
 pub trait Backend {
@@ -23,9 +22,9 @@ pub trait Backend {
     where
         I: Iterator<Item = i32>;
 
-    fn add_debug_info<D: Debug>(&mut self, debug: D) {}
+    fn add_debug_info<D: Debug>(&mut self, _debug: D) {}
 
-    fn append_debug_info<D: Debug>(&mut self, debug: D) {}
+    fn append_debug_info<D: Debug>(&mut self, _debug: D) {}
 }
 
 /// A trait for Backends with are capable of solving SAT Problems.
@@ -35,8 +34,8 @@ pub trait Solver: Backend {
     fn solve(&mut self) -> bool;
 
     /// Returns if the integer SAT variable is true in the model or not.
-    /// 
-    /// This function should panic if solve wasn't called previously or wasn't able to 
+    ///
+    /// This function should panic if solve wasn't called previously or wasn't able to
     /// solve the problem.
     fn value(&self, var: i32) -> bool;
 }
@@ -152,107 +151,6 @@ pub trait SatVar: Debug + Hash + Eq + Clone {}
 
 impl<V: Hash + Eq + Clone + Debug> SatVar for V {}
 
-/// Mapper from user defined variables and integer sat variables.
-pub struct VarMap<V> {
-    forward: HashMap<V, i32>,
-    reverse: HashMap<i32, V>,
-    next_id: i32,
-}
-
-impl<V> Default for VarMap<V> {
-    fn default() -> Self {
-        Self {
-            forward: Default::default(),
-            reverse: Default::default(),
-            next_id: 1,
-        }
-    }
-}
-
-impl<V: Debug> Debug for VarMap<V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map: Vec<_> = self.forward.iter().collect();
-        map.sort_by_key(|&(_, &i)| i);
-
-        f.debug_list().entries(map).finish()
-    }
-}
-
-impl<V: SatVar> VarMap<V> {
-    /// Translates an element of type `V` to a integer SAT variable used by the
-    /// backend solver.
-    /// If `var` wasn't already used it generates a new SAT variable.
-    /// Depending on whether `var` is `Pos` or `Neg` the returned value is
-    /// positive or negative.
-    pub fn add_var(&mut self, lit: impl Into<VarType<V>>) -> i32 {
-        let lit = lit.into();
-
-        let lit = match lit {
-            VarType::Named(lit) => lit,
-            VarType::Unnamed(i) => return i,
-        };
-
-        let (var, pol) = match lit {
-            Lit::Pos(v) => (v, 1),
-            Lit::Neg(v) => (v, -1),
-        };
-
-        let id = if let Some(id) = self.forward.get(&var) {
-            *id
-        } else {
-            let id = self.new_var();
-
-            self.forward.insert(var.clone(), id);
-            self.reverse.insert(id, var);
-
-            id
-        };
-
-        pol * id
-    }
-
-    /// Same as `add_var` but it won't insert new `Lit<V>` instead returning `None`.
-    pub fn get_var(&self, lit: impl Into<VarType<V>>) -> Option<i32> {
-        let lit = lit.into();
-
-        let lit = match lit {
-            VarType::Named(lit) => lit,
-            VarType::Unnamed(i) => return Some(i),
-        };
-
-        let (var, pol) = match lit {
-            Lit::Pos(v) => (v, 1),
-            Lit::Neg(v) => (v, -1),
-        };
-
-        Some(pol * self.forward.get(&var).copied()?)
-    }
-
-    /// Lookup the correct `V` based on the integer SAT variable.
-    pub fn lookup(&self, lit: i32) -> Option<Lit<V>> {
-        let var = self.reverse.get(&lit.abs())?.clone();
-
-        if lit < 0 {
-            Some(Lit::Neg(var))
-        } else {
-            Some(Lit::Pos(var))
-        }
-    }
-
-    pub(crate) fn iter_internal_vars(&self) -> impl Iterator<Item = i32> {
-        1..self.next_id
-    }
-}
-
-impl<V> VarMap<V> {
-    /// Generates fresh (unused) SAT variable.
-    pub fn new_var(&mut self) -> i32 {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
-    }
-}
-
 /// Result of solving.
 #[derive(Clone)]
 pub struct Model<V> {
@@ -304,12 +202,14 @@ impl<V: SatVar> Model<V> {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn lit_internal(&self, lit: VarType<V>) -> bool {
         self.assignments.contains(&lit)
     }
 }
 
 impl<V: SatVar + Ord> Model<V> {
+    #[allow(unused)]
     pub(crate) fn print_model(&self) {
         println!("{:?}", {
             let mut m = self.all_vars().collect::<Vec<_>>();
@@ -366,9 +266,6 @@ pub struct Encoder<V, S> {
     pub varmap: VarMap<V>,
     pub debug: bool,
 }
-
-/// Encoder using the CaDiCal Sat solver.
-pub type DefaultEncoder<V> = Encoder<V, cadical::Solver>;
 
 impl<V: SatVar, S: Default> Encoder<V, S> {
     /// Creates a new encoder.
@@ -434,7 +331,8 @@ where
         );
 
         if self.debug {
-            self.solver.append_debug_info(DisplayAsDebug(format!(" => {}", repr)));
+            self.solver
+                .append_debug_info(DisplayAsDebug(format!(" => {}", repr)));
         }
 
         VarType::Unnamed(repr)
@@ -455,7 +353,8 @@ where
         );
 
         if self.debug {
-            self.solver.append_debug_info(DisplayAsDebug(format!(" == {}", repr)));
+            self.solver
+                .append_debug_info(DisplayAsDebug(format!(" == {}", repr)));
         }
 
         VarType::Unnamed(repr)
@@ -494,100 +393,6 @@ impl<V: SatVar, S: Solver> Encoder<V, S> {
             Some(Model { assignments })
         } else {
             None
-        }
-    }
-}
-
-impl Backend for cadical::Solver {
-    fn add_clause<I>(&mut self, lits: I)
-    where
-        I: Iterator<Item = i32>,
-    {
-        self.add_clause(lits.into_iter());
-    }
-
-    fn add_debug_info<D: Debug>(&mut self, debug: D) {
-        println!("{:+?}", debug)
-    }
-}
-
-impl Solver for cadical::Solver {
-    fn solve(&mut self) -> bool {
-        self.solve().unwrap_or(false)
-    }
-
-    fn value(&self, var: i32) -> bool {
-        self.value(var).unwrap_or(true)
-    }
-}
-
-enum DimacsEntry {
-    Clause(Vec<i32>),
-    Comment(String),
-}
-
-#[derive(Default)]
-pub struct DimacsWriter {
-    max_var: i32,
-    data: Vec<DimacsEntry>,
-}
-
-impl DimacsWriter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn write_to(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
-        let clause_count = self
-            .data
-            .iter()
-            .filter(|e| matches!(e, DimacsEntry::Clause(..)))
-            .count();
-
-        writeln!(writer, "p cnf {} {}", self.max_var, clause_count)?;
-
-        for entry in &self.data {
-            match entry {
-                DimacsEntry::Clause(clause) => {
-                    for l in clause {
-                        write!(writer, "{} ", l)?
-                    }
-                    writeln!(writer, "0")?;
-                },
-                DimacsEntry::Comment(s) => {
-                    for line in s.lines() {
-                        writeln!(writer, "c {}", line)?;
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl Backend for DimacsWriter {
-    fn add_clause<I>(&mut self, lits: I)
-    where
-        I: Iterator<Item = i32>,
-    {
-        let clause: Vec<_> = lits.collect();
-
-        for &lit in clause.iter() {
-            self.max_var = self.max_var.max(lit.abs());
-        }
-
-        self.data.push(DimacsEntry::Clause(clause));
-    }
-
-    fn add_debug_info<D: Debug>(&mut self, debug: D) {
-        self.data
-            .push(DimacsEntry::Comment(format!("{:#?}", debug)));
-    }
-
-    fn append_debug_info<D: Debug>(&mut self, debug: D) {
-        if let Some(DimacsEntry::Comment(s)) = self.data.last_mut() {
-            s.push_str(&format!("{:?}", debug));
         }
     }
 }

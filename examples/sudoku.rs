@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use itertools::iproduct;
-use sat_encoder::{DefaultEncoder, Encoder, Lit::Pos, Model, Backend, constraints::{AtleastK, ExactlyK}};
+use sat_encoder::{CadicalEncoder, Encoder, Lit::Pos, Model, Backend, constraints::{AtLeastK, ExactlyK}};
 use structopt::StructOpt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,7 +29,7 @@ fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
                 value,
             })
         });
-        let constraint = AtleastK { k: 1, lits };
+        let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
     }
 
@@ -42,7 +42,7 @@ fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
                 value,
             })
         });
-        let constraint = AtleastK { k: 1, lits };
+        let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
     }
 
@@ -55,7 +55,7 @@ fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
                 value,
             })
         });
-        let constraint = AtleastK { k: 1, lits };
+        let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
     }
 }
@@ -119,7 +119,7 @@ fn main() -> anyhow::Result<()> {
 
     let sudoku = parse_input(&arg.sudoku)?;
 
-    let mut encoder = DefaultEncoder::new();
+    let mut encoder = CadicalEncoder::new();
 
     encode_sudoku_rules(&mut encoder);
 

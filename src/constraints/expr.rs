@@ -1,11 +1,10 @@
 use std::{
     fmt::{self, Debug},
-    iter::once,
     ops::{BitAnd, BitOr, Not},
 };
 
 use super::util::ClauseCollector;
-use crate::{Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap, VarType, clause};
+use crate::{Constraint, ConstraintRepr, Lit, SatVar, Backend, VarMap, VarType, clause};
 
 /// Tseitin Encoding of propositional logic formulas.
 #[derive(Clone)]
@@ -237,10 +236,10 @@ mod tests {
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
             },
-            AtMostK, AtleastK,
+            AtMostK, AtLeastK,
         },
-        prelude::*,
-        VarType,
+        CadicalEncoder,
+        Lit::*,
     };
 
     #[test]
@@ -249,7 +248,7 @@ mod tests {
 
         let expr = lit & Pos(2) & Pos(3);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -265,7 +264,7 @@ mod tests {
 
         let expr = lit | Pos(2) | Pos(3);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -281,7 +280,7 @@ mod tests {
 
         let expr = !lit;
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -297,7 +296,7 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         encoder.add_constraint(expr);
 
@@ -319,7 +318,7 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
         encoder.add_constraint(e);
 
         let res = retry_until_unsat(&mut encoder, |model| {
@@ -337,7 +336,7 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_implies_repr(
@@ -364,7 +363,7 @@ mod tests {
 
         let expr = lit.clone() & Pos(2) | !lit & Pos(3);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_equals_repr(
@@ -394,7 +393,7 @@ mod tests {
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let repr = encoder.varmap.new_var();
         e.encode_constraint_implies_repr(
@@ -423,12 +422,12 @@ mod tests {
             k: 0,
             lits: vars.clone(),
         };
-        let filled_cond = AtleastK { k: 3, lits: vars };
+        let filled_cond = AtLeastK { k: 3, lits: vars };
 
         let e =
             Expr::from_constraint(filled_cond) | Expr::from_constraint(empty_cond);
 
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         encoder.add_constraint(e);
 

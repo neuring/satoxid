@@ -1,11 +1,7 @@
 use core::fmt;
-use std::{
-    fmt::Debug,
-    iter::once,
-    ops::{BitAnd, BitOr},
-};
+use std::fmt::Debug;
 
-use super::{Constraint, Encoder, Lit, SatVar, VarMap};
+use super::{Constraint, Lit, SatVar, VarMap};
 use crate::{ConstraintRepr, Backend, VarType};
 
 mod cardinality;
@@ -16,7 +12,7 @@ pub(crate) mod util;
 #[cfg(test)]
 mod test_util;
 
-pub use cardinality::{AtMostK, AtleastK, ExactlyK, LessCardinality, SameCardinality};
+pub use cardinality::{AtMostK, AtLeastK, ExactlyK, LessCardinality, SameCardinality};
 pub use conditional::If;
 pub use expr::Expr;
 
@@ -340,13 +336,13 @@ mod tests {
         },
         *,
     };
-    use crate::{ConstraintRepr, DefaultEncoder, Encoder, Lit, Backend, VarType};
+    use crate::{ConstraintRepr, CadicalEncoder, Lit};
 
     use num_integer::binomial;
 
     #[test]
     fn lit_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let lit = Lit::Pos(1);
 
@@ -367,7 +363,7 @@ mod tests {
 
     #[test]
     fn lit_implies_repr_none() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let lit = Lit::Pos(1);
 
@@ -386,7 +382,7 @@ mod tests {
 
     #[test]
     fn lit_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let lit = Lit::Pos(1);
 
@@ -407,7 +403,7 @@ mod tests {
 
     #[test]
     fn clause_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let clause = Or((1..=range).map(Lit::Pos));
@@ -427,7 +423,7 @@ mod tests {
 
     #[test]
     fn clause_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let clause = Or((1..=range).map(Lit::Pos));
@@ -447,7 +443,7 @@ mod tests {
 
     #[test]
     fn and_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let constraint = And((1..=range).map(Lit::Pos));
@@ -468,7 +464,7 @@ mod tests {
 
     #[test]
     fn and_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let constraint = And((1..=range).map(Lit::Pos));
@@ -488,7 +484,7 @@ mod tests {
 
     #[test]
     fn equal_constraint() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 7;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -506,7 +502,7 @@ mod tests {
 
     #[test]
     fn equal_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -528,7 +524,7 @@ mod tests {
 
     #[test]
     fn equal_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -549,11 +545,11 @@ mod tests {
 
     #[test]
     fn not_constraint() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let k = 3;
-        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
 
         let constraint = Not(constraint);
 
@@ -569,11 +565,11 @@ mod tests {
 
     #[test]
     fn not_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let k = 3;
-        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
 
         let constraint = Not(constraint);
 
@@ -588,11 +584,11 @@ mod tests {
 
     #[test]
     fn not_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 6;
         let k = 3;
-        let constraint = AtleastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
 
         let constraint = Not(constraint);
 

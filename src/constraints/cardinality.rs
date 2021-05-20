@@ -1,13 +1,9 @@
 use core::fmt;
-use std::{
-    fmt::Debug,
-    iter::{self, once},
-};
+use std::{fmt::Debug, iter};
 
 use crate::{
     circuit::{Circuit, Direction},
-    clause, Constraint, ConstraintRepr, Encoder, Lit, SatVar, Backend, VarMap,
-    VarType,
+    clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType,
 };
 
 /// Encodes a sequential counter used for all cardinality constraint types.
@@ -17,7 +13,7 @@ fn encode_cardinality_constraint<V, S, L, I>(
     lits: I,
     k: u32,
     dir: Direction,
-    mut out: Option<&[i32]>,
+    out: Option<&[i32]>,
     solver: &mut S,
     varmap: &mut VarMap<V>,
 ) -> Vec<i32>
@@ -35,7 +31,6 @@ where
     let mut circuit = Circuit::new(solver, dir);
 
     let vars: Vec<_> = lits.map(|v| varmap.add_var(v)).collect();
-    let n = vars.len();
 
     if k == 1 {
         return if let Some(out) = out {
@@ -221,15 +216,15 @@ where
     }
 }
 
-/// This constraint encodes the requirement that atleast `k` of `lits` variables
+/// This constraint encodes the requirement that at least `k` of `lits` variables
 /// are true.
 #[derive(Clone)]
-pub struct AtleastK<I> {
+pub struct AtLeastK<I> {
     pub lits: I,
     pub k: u32,
 }
 
-impl<V, L, I> Constraint<V> for AtleastK<I>
+impl<V, L, I> Constraint<V> for AtLeastK<I>
 where
     V: SatVar,
     L: Into<VarType<V>> + Debug,
@@ -253,7 +248,7 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for AtleastK<I>
+impl<V, L, I> ConstraintRepr<V> for AtLeastK<I>
 where
     V: SatVar,
     L: Into<VarType<V>> + Debug,
@@ -328,14 +323,14 @@ where
     }
 }
 
-impl<V: Debug, I> Debug for AtleastK<I>
+impl<V: Debug, I> Debug for AtLeastK<I>
 where
     I: Iterator<Item = V> + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
 
-        f.debug_struct("AtleastK")
+        f.debug_struct("AtLeastK")
             .field("k", &self.k)
             .field("vars", &lits)
             .finish()
@@ -551,7 +546,6 @@ fn encode_same_cardinality_repr<V: SatVar>(
     }
 
     let max = constraint.lits.iter().map(|l| l.len()).max().unwrap();
-    let min = constraint.lits.iter().map(|l| l.len()).min().unwrap();
 
     let mut reprs = Vec::new();
 
@@ -625,7 +619,7 @@ where
         let larger = self.larger.collect::<Vec<_>>();
         let larger_len = larger.len();
 
-        let mut smaller = self.smaller.collect::<Vec<_>>();
+        let smaller = self.smaller.collect::<Vec<_>>();
         let smaller_len = smaller.len();
 
         let max = usize::max(larger_len, smaller_len);
@@ -650,11 +644,16 @@ where
 
         larger_out
             .extend(iter::from_fn(|| Some(varmap.new_var())).take(max - larger_len));
-        smaller_out
-            .extend(iter::from_fn(|| Some(varmap.new_var())).take(max - smaller_len));
+        smaller_out.extend(
+            iter::from_fn(|| Some(varmap.new_var())).take(max - smaller_len),
+        );
 
         for i in 1..max {
-            solver.add_clause(clause!(-smaller_out[i - 1], smaller_out[i], larger_out[i]));
+            solver.add_clause(clause!(
+                -smaller_out[i - 1],
+                smaller_out[i],
+                larger_out[i]
+            ));
         }
 
         solver.add_clause(clause!(*larger_out.first().unwrap()));
@@ -672,7 +671,6 @@ where
 //        todo!()
 //    }
 //}
-
 
 impl<L1, L2, I1, I2> Debug for LessCardinality<I1, I2>
 where
@@ -703,15 +701,15 @@ mod tests {
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
             },
-            Equal, Or,
+            Equal,
         },
-        prelude::*,
-        Backend, VarType,
+        CadicalEncoder,
+        Lit::*,
     };
 
     #[test]
     fn normal_atmostk() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
@@ -728,7 +726,7 @@ mod tests {
 
     #[test]
     fn normal_atmost0() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let lits = (1..=10).map(|i| Pos(i));
         let k = 0;
@@ -744,7 +742,7 @@ mod tests {
 
     #[test]
     fn normal_atmost_one_literal() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let lits = std::iter::once(Pos(1));
         let k = 1;
@@ -759,7 +757,7 @@ mod tests {
 
     #[test]
     fn atmostk_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
@@ -785,7 +783,7 @@ mod tests {
 
     #[test]
     fn atmostk_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
@@ -812,7 +810,7 @@ mod tests {
 
     #[test]
     fn atmost0_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -836,7 +834,7 @@ mod tests {
 
     #[test]
     fn atmost0_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -862,14 +860,14 @@ mod tests {
     }
 
     #[test]
-    fn normal_atleastk() {
-        let mut encoder = DefaultEncoder::new();
+    fn normal_at_least_k() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
         let lits = (0..range).map(|i| Pos(i));
 
-        encoder.add_constraint(AtleastK { k, lits });
+        encoder.add_constraint(AtLeastK { k, lits });
 
         let res = retry_until_unsat(&mut encoder, |model| {
             //model.print_model();
@@ -882,29 +880,28 @@ mod tests {
     }
 
     #[test]
-    fn normal_atleast_one_literal() {
-        let mut encoder = DefaultEncoder::new();
+    fn normal_at_least_one_literal() {
+        let mut encoder = CadicalEncoder::new();
 
         let k = 1;
         let lits = std::iter::once(Pos(1));
 
-        encoder.add_constraint(AtleastK { k, lits });
+        encoder.add_constraint(AtLeastK { k, lits });
 
-        let res = retry_until_unsat(&mut encoder, |model| {
-            assert!(model.var(1).unwrap())
-        });
+        let res =
+            retry_until_unsat(&mut encoder, |model| assert!(model.var(1).unwrap()));
         assert_eq!(res, 1);
     }
 
     #[test]
-    fn normal_atleast0() {
-        let mut encoder = DefaultEncoder::new();
+    fn normal_at_least_0() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 5;
         let k = 0;
         let lits = (0..range).map(Pos);
 
-        // Because atleast 0 shouldn't encode anything we add an equivalent var for
+        // Because AtLeast 0 shouldn't encode anything we add an equivalent var for
         // each var so every var appears in the resulting set of clauses.
         // Otherwise the sat solver has no variables and just returns an empty set as
         // the only solution.
@@ -912,7 +909,7 @@ mod tests {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
-        encoder.add_constraint(AtleastK { k, lits });
+        encoder.add_constraint(AtLeastK { k, lits });
 
         let res = retry_until_unsat(&mut encoder, |model| {
             //model.print_model();
@@ -925,14 +922,14 @@ mod tests {
     }
 
     #[test]
-    fn normal_atleast1() {
-        let mut encoder = DefaultEncoder::new();
+    fn normal_at_least_1() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 5;
         let k = 1;
         let lits = (0..range).map(Pos);
 
-        encoder.add_constraint(AtleastK { k, lits });
+        encoder.add_constraint(AtLeastK { k, lits });
 
         let res = retry_until_unsat(&mut encoder, |model| {
             model.print_model();
@@ -942,13 +939,13 @@ mod tests {
     }
 
     #[test]
-    fn atleastk_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+    fn at_least_k_implies_repr() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 6;
         let lits = (1..=range).map(|i| Pos(i));
-        let constraint = AtleastK { k, lits };
+        let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
@@ -968,13 +965,13 @@ mod tests {
     }
 
     #[test]
-    fn atleastk_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+    fn at_least_k_equals_repr() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
         let lits = (1..=range).map(|i| Pos(i));
-        let constraint = AtleastK { k, lits };
+        let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
@@ -994,8 +991,8 @@ mod tests {
     }
 
     #[test]
-    fn atleast0_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+    fn at_least_0_implies_repr() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -1005,7 +1002,7 @@ mod tests {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
-        let constraint = AtleastK { k, lits };
+        let constraint = AtLeastK { k, lits };
 
         let repr = encoder.varmap.new_var();
         constraint.encode_constraint_implies_repr(
@@ -1022,8 +1019,8 @@ mod tests {
     }
 
     #[test]
-    fn atleast0_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+    fn at_least_0_equals_repr() {
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -1033,7 +1030,7 @@ mod tests {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
-        let constraint = AtleastK { k, lits };
+        let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
@@ -1054,7 +1051,7 @@ mod tests {
 
     #[test]
     fn normal_exactlyk() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
@@ -1071,7 +1068,7 @@ mod tests {
 
     #[test]
     fn normal_exactly0() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 5;
         let k = 0;
@@ -1092,7 +1089,7 @@ mod tests {
 
     #[test]
     fn exactlyk_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 6;
@@ -1115,7 +1112,7 @@ mod tests {
 
     #[test]
     fn exactlyk_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 5;
@@ -1138,7 +1135,7 @@ mod tests {
 
     #[test]
     fn exactly0_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -1166,7 +1163,7 @@ mod tests {
 
     #[test]
     fn exactly0_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range = 10;
         let k = 0;
@@ -1194,7 +1191,7 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 5;
 
@@ -1228,7 +1225,7 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality_one_large_size() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range1: u32 = 1;
         let range2: u32 = 5;
@@ -1255,15 +1252,12 @@ mod tests {
             assert_eq!(c1, c2);
         });
 
-        assert_eq!(
-            res as u32,
-            6,
-        );
+        assert_eq!(res as u32, 6,);
     }
 
     #[test]
     fn normal_same_cardinality_different_sizes() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range1: u32 = 3;
         let range2: u32 = 5;
@@ -1300,7 +1294,7 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality_but_more() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 3;
 
@@ -1348,7 +1342,7 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 5;
 
@@ -1386,7 +1380,7 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr_different_sizes() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range1: u32 = 5;
         let range2: u32 = 3;
@@ -1427,7 +1421,7 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr_but_more() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 3;
 
@@ -1477,7 +1471,7 @@ mod tests {
 
     #[test]
     fn same_cardinality_equals_repr() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 5;
 
@@ -1515,7 +1509,7 @@ mod tests {
 
     #[test]
     fn less_cardinality_constraint() {
-        let mut encoder = DefaultEncoder::new();
+        let mut encoder = CadicalEncoder::new();
 
         let range: u32 = 5;
 
@@ -1542,11 +1536,14 @@ mod tests {
         });
         assert_eq!(
             res as u32,
-            (0..range).map(|i| {
-                let smaller_combs = binomial(range, i);
+            (0..range)
+                .map(|i| {
+                    let smaller_combs = binomial(range, i);
 
-                smaller_combs * (i+1..=range).map(|i| binomial(range, i)).sum::<u32>()
-            }).sum::<u32>(),
+                    smaller_combs
+                        * (i + 1..=range).map(|i| binomial(range, i)).sum::<u32>()
+                })
+                .sum::<u32>(),
         );
     }
 }

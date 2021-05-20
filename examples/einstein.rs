@@ -1,6 +1,6 @@
 use sat_encoder::{
-    constraints::{AtleastK, ExactlyK, If, Or},
-    Backend, DefaultEncoder, Encoder,
+    constraints::{AtLeastK, ExactlyK, If, Or},
+    Backend, CadicalEncoder, Encoder,
     Lit::Pos,
 };
 use strum::IntoEnumIterator;
@@ -92,7 +92,7 @@ macro_rules! every_property_value_appears_once {
                     property: Property::$prop(p),
                 })
                 .map(Pos);
-            $encoder.add_constraint(AtleastK { k: 1, lits });
+            $encoder.add_constraint(AtLeastK { k: 1, lits });
         }
     };
 }
@@ -238,7 +238,7 @@ macro_rules! print_property {
 }
 
 fn main() {
-    let mut encoder = DefaultEncoder::new();
+    let mut encoder = CadicalEncoder::new();
 
     encode_general_rules(&mut encoder);
 

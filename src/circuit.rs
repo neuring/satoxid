@@ -82,6 +82,7 @@ impl<'a, S: Backend> Circuit<'a, S> {
         self.solver.add_clause(clause![-i]);
     }
 
+    #[allow(unused)]
     pub fn set_one(&mut self, i: i32) {
         self.solver.add_clause(clause![i]);
     }
