@@ -107,7 +107,7 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
 }
 
 /// Enum to describe the polarity of variables.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lit<V> {
     Pos(V),
     Neg(V),
@@ -136,6 +136,43 @@ impl<V> Lit<V> {
     /// Returns false if `Lit` is negative.
     pub fn is_neg(&self) -> bool {
         matches!(self, Self::Pos(_))
+    }
+}
+
+impl<V: PartialOrd> PartialOrd for Lit<V> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        use std::cmp::Ordering::*;
+
+        let o = self.var().partial_cmp(other.var())?;
+
+        if o == Equal {
+            match (self, other) {
+                (Lit::Pos(_), Lit::Neg(_)) => Less,
+                (Lit::Neg(_), Lit::Pos(_)) => Greater,
+                (Lit::Pos(_), Lit::Pos(_)) | (Lit::Neg(_), Lit::Neg(_)) => Equal,
+            }
+        } else {
+            o
+        }
+        .into()
+    }
+}
+
+impl<V: Ord> Ord for Lit<V> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering::*;
+
+        let o = self.var().cmp(other.var());
+
+        if o == Equal {
+            match (self, other) {
+                (Lit::Pos(_), Lit::Neg(_)) => Less,
+                (Lit::Neg(_), Lit::Pos(_)) => Greater,
+                (Lit::Pos(_), Lit::Pos(_)) | (Lit::Neg(_), Lit::Neg(_)) => Equal,
+            }
+        } else {
+            o
+        }
     }
 }
 
