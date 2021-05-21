@@ -721,7 +721,10 @@ mod tests {
             model.print_model();
             assert!(model.vars().filter(|l| l.is_pos()).count() <= k as usize)
         });
-        assert_eq!(models as u32, (0..=k).map(|i| binomial(range, i)).sum());
+        assert_eq!(
+            models as u32,
+            (0..=k).map(|i| binomial(range, i)).sum::<u32>()
+        );
     }
 
     #[test]
@@ -776,7 +779,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (0..=k).map(|i| binomial(range, i)).sum()
+            (0..=k).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }
@@ -803,7 +806,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (0..=k).map(|i| binomial(range, i)).sum()
+            (0..=k).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }
@@ -854,7 +857,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (0..=k).map(|i| binomial(range, i)).sum()
+            (0..=k).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }
@@ -876,7 +879,10 @@ mod tests {
             println!("{:?}", v);
             assert!(model.vars().filter(|l| l.is_pos()).count() >= k as usize)
         });
-        assert_eq!(res as u32, (k..=range).map(|i| binomial(range, i)).sum());
+        assert_eq!(
+            res as u32,
+            (k..=range).map(|i| binomial(range, i)).sum::<u32>()
+        );
     }
 
     #[test]
@@ -959,7 +965,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (k..=range).map(|i| binomial(range, i)).sum()
+            (k..=range).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }
@@ -985,7 +991,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (k..=range).map(|i| binomial(range, i)).sum()
+            (k..=range).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }
@@ -1044,7 +1050,7 @@ mod tests {
         });
         assert_eq!(
             res.correct as u32,
-            (k..=range).map(|i| binomial(range, i)).sum()
+            (k..=range).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(res.total(), 1 << range);
     }

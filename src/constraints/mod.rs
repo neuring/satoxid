@@ -2,7 +2,7 @@ use core::fmt;
 use std::fmt::Debug;
 
 use super::{Constraint, Lit, SatVar, VarMap};
-use crate::{ConstraintRepr, Backend, VarType};
+use crate::{Backend, ConstraintRepr, VarType};
 
 mod cardinality;
 mod conditional;
@@ -12,7 +12,9 @@ pub(crate) mod util;
 #[cfg(test)]
 mod test_util;
 
-pub use cardinality::{AtMostK, AtLeastK, ExactlyK, LessCardinality, SameCardinality};
+pub use cardinality::{
+    AtLeastK, AtMostK, ExactlyK, LessCardinality, SameCardinality,
+};
 pub use conditional::If;
 pub use expr::Expr;
 
@@ -52,7 +54,6 @@ impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-
         let var = varmap.add_var(self);
 
         if let Some(repr) = repr {
@@ -102,7 +103,6 @@ impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-
         let var = varmap.add_var(self);
 
         if let Some(repr) = repr {
@@ -282,9 +282,10 @@ where
 #[derive(Debug, Clone)]
 pub struct Not<C>(pub C);
 
-impl<V, C> Constraint<V> for Not<C> 
-where V: SatVar,
-      C: ConstraintRepr<V>,
+impl<V, C> Constraint<V> for Not<C>
+where
+    V: SatVar,
+    C: ConstraintRepr<V>,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let repr = self.0.encode_constraint_implies_repr(None, solver, varmap);
@@ -293,9 +294,10 @@ where V: SatVar,
     }
 }
 
-impl<V, C> ConstraintRepr<V> for Not<C> 
-where V: SatVar,
-      C: ConstraintRepr<V>,
+impl<V, C> ConstraintRepr<V> for Not<C>
+where
+    V: SatVar,
+    C: ConstraintRepr<V>,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -336,7 +338,7 @@ mod tests {
         },
         *,
     };
-    use crate::{ConstraintRepr, CadicalEncoder, Lit};
+    use crate::{CadicalEncoder, ConstraintRepr, Lit};
 
     use num_integer::binomial;
 
@@ -549,7 +551,10 @@ mod tests {
 
         let range = 6;
         let k = 3;
-        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK {
+            k,
+            lits: (0..range).map(Lit::Pos),
+        };
 
         let constraint = Not(constraint);
 
@@ -557,10 +562,11 @@ mod tests {
 
         let res = retry_until_unsat(&mut encoder, |model| {
             assert!(
-                model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
+                model.vars().filter(|l| matches!(l, Lit::Pos(_))).count()
+                    < k as usize
             );
         });
-        assert_eq!(res as u32, (0..k).map(|i| binomial(range, i)).sum());
+        assert_eq!(res as u32, (0..k).map(|i| binomial(range, i)).sum::<u32>());
     }
 
     #[test]
@@ -569,16 +575,26 @@ mod tests {
 
         let range = 6;
         let k = 3;
-        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK {
+            k,
+            lits: (0..range).map(Lit::Pos),
+        };
 
         let constraint = Not(constraint);
 
-        let repr = constraint.encode_constraint_implies_repr(None, &mut encoder.solver, &mut encoder.varmap);
+        let repr = constraint.encode_constraint_implies_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
         });
-        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(range, i)).sum());
+        assert_eq!(
+            res.correct as u32,
+            (0..k).map(|i| binomial(range, i)).sum::<u32>()
+        );
         assert_eq!(res.total() as u32, 1 << range);
     }
 
@@ -588,16 +604,26 @@ mod tests {
 
         let range = 6;
         let k = 3;
-        let constraint = AtLeastK { k, lits: (0..range).map(Lit::Pos)};
+        let constraint = AtLeastK {
+            k,
+            lits: (0..range).map(Lit::Pos),
+        };
 
         let constraint = Not(constraint);
 
-        let repr = constraint.encode_constraint_equals_repr(None, &mut encoder.solver, &mut encoder.varmap);
+        let repr = constraint.encode_constraint_equals_repr(
+            None,
+            &mut encoder.solver,
+            &mut encoder.varmap,
+        );
 
         let res = constraint_equals_repr_tester(&mut encoder, repr, |model| {
             model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() < k as usize
         });
-        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(range, i)).sum());
+        assert_eq!(
+            res.correct as u32,
+            (0..k).map(|i| binomial(range, i)).sum::<u32>()
+        );
         assert_eq!(res.total() as u32, 1 << range);
     }
 }

@@ -4,7 +4,9 @@ use std::{
 };
 
 use super::util::ClauseCollector;
-use crate::{Constraint, ConstraintRepr, Lit, SatVar, Backend, VarMap, VarType, clause};
+use crate::{
+    clause, Backend, Constraint, ConstraintRepr, Lit, SatVar, VarMap, VarType,
+};
 
 /// Tseitin Encoding of propositional logic formulas.
 #[derive(Clone)]
@@ -236,7 +238,7 @@ mod tests {
                 constraint_equals_repr_tester, constraint_implies_repr_tester,
                 retry_until_unsat,
             },
-            AtMostK, AtLeastK,
+            AtLeastK, AtMostK,
         },
         CadicalEncoder,
         Lit::*,
@@ -409,7 +411,10 @@ mod tests {
 
             a && b && c
         });
-        assert_eq!(res.correct as u32, (0..k).map(|i| binomial(3, i)).sum());
+        assert_eq!(
+            res.correct as u32,
+            (0..k).map(|i| binomial(3, i)).sum::<u32>()
+        );
         assert_eq!(res.total(), 1 << 5)
     }
 

@@ -93,6 +93,7 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     }
 
     /// Encode that repr is true if the constraint is satisfied.
+    /// The semantics are less restrictive for to allow for cheaper encoding.
     /// No guarantees are given about the constraints of repr if the constraint is false.
     /// Usually it has either the semantics of implies_repr or equals_repr.
     fn encode_constraint_repr_cheap<S: Backend>(

@@ -10,6 +10,14 @@ pub struct VarMap<V> {
     next_id: i32,
 }
 
+impl<V: SatVar> PartialEq for VarMap<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.next_id == other.next_id && self.forward == other.forward
+    }
+}
+
+impl<V: SatVar> Eq for VarMap<V> {}
+
 impl<V> Default for VarMap<V> {
     fn default() -> Self {
         Self {
@@ -104,3 +112,211 @@ impl<V> VarMap<V> {
     }
 }
 
+#[cfg(features = "serde")]
+mod serde {
+    use super::*;
+    use ::serde::{
+        de::{self, MapAccess, SeqAccess, Visitor},
+        ser::SerializeStruct,
+        Deserialize, Deserializer, Serialize, Serializer
+    };
+
+    impl<V: Serialize + SatVar> Serialize for VarMap<V> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut struct_serializer = serializer.serialize_struct("VarMap", 2)?;
+
+            let vars = self.next_id - 1;
+
+            struct_serializer.serialize_field("vars", &vars)?;
+
+            struct_serializer.serialize_field("mapping", &self.reverse)?;
+
+            struct_serializer.end()
+        }
+    }
+
+    impl<'de, V: SatVar + Deserialize<'de>> Deserialize<'de> for VarMap<V> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            enum Field {
+                Vars,
+                Mapping,
+            }
+
+            impl<'de> Deserialize<'de> for Field {
+                fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+                where
+                    D: Deserializer<'de>,
+                {
+                    struct FieldVisitor;
+
+                    impl<'de> Visitor<'de> for FieldVisitor {
+                        type Value = Field;
+
+                        fn expecting(
+                            &self,
+                            formatter: &mut fmt::Formatter,
+                        ) -> fmt::Result {
+                            formatter.write_str("`vars` or `mapping`")
+                        }
+
+                        fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                        where
+                            E: de::Error,
+                        {
+                            match value {
+                                "vars" => Ok(Field::Vars),
+                                "mapping" => Ok(Field::Mapping),
+                                _ => Err(de::Error::unknown_field(value, FIELDS)),
+                            }
+                        }
+                    }
+
+                    deserializer.deserialize_identifier(FieldVisitor)
+                }
+            }
+
+            struct VarMapVisitor<VAR>(std::marker::PhantomData<VAR>);
+
+            impl<'de, VAR: SatVar + Deserialize<'de>> Visitor<'de> for VarMapVisitor<VAR> {
+                type Value = VarMap<VAR>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    write!(
+                        formatter,
+                        "struct VarMap<{}>",
+                        std::any::type_name::<VAR>()
+                    )
+                }
+
+                fn visit_seq<V>(self, mut seq: V) -> Result<VarMap<VAR>, V::Error>
+                where
+                    V: SeqAccess<'de>,
+                {
+                    let vars: i32 = seq
+                        .next_element()?
+                        .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                    let next_id = vars + 1;
+
+                    let reverse_map: HashMap<i32, VAR> = seq
+                        .next_element()?
+                        .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+                    let forward_map =
+                        reverse_map.iter().map(|(&k, v)| (v.clone(), k)).collect();
+
+                    Ok(VarMap {
+                        forward: forward_map,
+                        reverse: reverse_map,
+                        next_id,
+                    })
+                }
+
+                fn visit_map<V>(self, mut map: V) -> Result<VarMap<VAR>, V::Error>
+                where
+                    V: MapAccess<'de>,
+                {
+                    let mut next_id = None;
+                    let mut reverse_map = None;
+
+                    while let Some(key) = map.next_key()? {
+                        match key {
+                            Field::Vars => {
+                                if next_id.is_some() {
+                                    return Err(de::Error::duplicate_field(
+                                        "vars",
+                                    ));
+                                }
+                                next_id = Some(map.next_value()?);
+                            }
+                            Field::Mapping => {
+                                if reverse_map.is_some() {
+                                    return Err(de::Error::duplicate_field(
+                                        "mapping",
+                                    ));
+                                }
+                                reverse_map = Some(map.next_value()?);
+                            }
+                        }
+                    }
+
+                    let vars: i32 = next_id
+                        .ok_or_else(|| de::Error::missing_field("next_id"))?;
+                    let next_id = vars + 1;
+
+                    let reverse_map: HashMap<i32, VAR> = reverse_map
+                        .ok_or_else(|| de::Error::missing_field("mapping"))?;
+                    let forward_map =
+                        reverse_map.iter().map(|(&k, v)| (v.clone(), k)).collect();
+
+                    Ok(VarMap {
+                        forward: forward_map,
+                        reverse: reverse_map,
+                        next_id,
+                    })
+                }
+            }
+
+            const FIELDS: &'static [&'static str] = &["vars", "mapping"];
+            deserializer.deserialize_struct(
+                "VarMap",
+                FIELDS,
+                VarMapVisitor(Default::default()),
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VarMap;
+    use crate::Lit::*;
+
+    use ::serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    enum SatVar {
+        A(i32, bool),
+        B(String),
+    }
+
+    #[test]
+    fn serde_test() {
+
+        let mut varmap = VarMap::default();
+
+        varmap.add_var(Pos(SatVar::A(0, true)));
+        varmap.add_var(Pos(SatVar::A(1, true)));
+        varmap.add_var(Pos(SatVar::A(2, false)));
+        varmap.add_var(Pos(SatVar::A(4, true)));
+        varmap.add_var(Pos(SatVar::B("hey".into())));
+        varmap.add_var(Pos(SatVar::B("listen".into())));
+
+        let s = serde_json::to_string(&varmap).unwrap();
+
+        let parsed_json: serde_json::Value = serde_json::from_str(&s).unwrap();
+
+        let json = serde_json::json!({
+            "vars" : 6, 
+            "mapping" : {
+                "1": {"A" : [0, true]},
+                "2": {"A" : [1, true]},
+                "3": {"A" : [2, false]},
+                "4": {"A" : [4, true]},
+                "5": {"B" : "hey"},
+                "6": {"B" : "listen"},
+            },
+        });
+
+        assert_eq!(json, parsed_json);
+
+        let v = serde_json::from_str(&s).unwrap();
+
+        assert_eq!(varmap, v);
+    }
+}
