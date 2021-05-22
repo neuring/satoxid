@@ -1,6 +1,9 @@
 use std::fmt;
 
-use sat_encoder::{Backend, CadicalEncoder, Encoder, Model, constraints::{AtLeastK, ExactlyK, If, Or}};
+use satoxid::{
+    constraints::{AtLeastK, ExactlyK, If, Or},
+    Backend, CadicalEncoder, Encoder, Model,
+};
 
 // Implementation of Einstein's Puzzle.
 // https://web.stanford.edu/~laurik/fsmbook/examples/Einstein'sPuzzle.html

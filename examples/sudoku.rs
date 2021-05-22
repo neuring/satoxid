@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use itertools::iproduct;
-use sat_encoder::{
+use satoxid::{
     constraints::{AtLeastK, ExactlyK},
     Backend, CadicalEncoder, Encoder, Model,
 };
