@@ -7,6 +7,7 @@ enum DimacsEntry {
     Comment(String),
 }
 
+/// Backend which collects all generated clauses and is able to print them in the [DIMACS](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/SATLINK____DIMACS) format.
 #[derive(Default)]
 pub struct DimacsWriter {
     max_var: i32,
@@ -14,10 +15,12 @@ pub struct DimacsWriter {
 }
 
 impl DimacsWriter {
+    /// Create new ´DimacsWriter´.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Write collected clauses to `writer`.
     pub fn write_to(&self, mut writer: impl std::io::Write) -> std::io::Result<()> {
         let clause_count = self
             .data

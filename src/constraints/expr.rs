@@ -8,7 +8,13 @@ use crate::{
     clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType,
 };
 
-/// Tseitin Encoding of propositional logic formulas.
+/// [Tseytin Encoding](https://en.wikipedia.org/wiki/Tseytin_transformation) of propositional logic formulas.
+///
+/// Allows encoding of arbitrary boolean formulas.
+/// It implements the [`BitAnd`], [`BitOr`] and [`Not`] traits, which should be used for
+/// the construction of boolean formulas.
+///
+/// **NOTE:** If you just want to 'and' or 'or' a bunch of literals use [`And`](crate::constraints::And) or [`Or`](crate::constraints::Or) for more efficient encodings.
 #[derive(Clone)]
 pub enum Expr<V> {
     And(Box<Expr<V>>, Box<Expr<V>>),
@@ -347,7 +353,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -374,7 +380,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_equals_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -404,7 +410,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         e.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 

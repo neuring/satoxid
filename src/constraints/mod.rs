@@ -1,3 +1,5 @@
+//! Collection of commonly used constraints.
+
 use core::fmt;
 use std::fmt::Debug;
 
@@ -133,8 +135,7 @@ where
     }
 }
 
-/// Constraint which requires all lits to be true.
-/// In some ways it's the opposite of `Clause`.
+/// Constraint which requires all literals to be true.
 #[derive(Clone)]
 pub struct And<I>(pub I);
 
@@ -184,7 +185,7 @@ where
     }
 }
 
-/// Constraint which requires all lits to be same value.
+/// Constraint which requires all literals to be same value.
 #[derive(Clone)]
 pub struct Equal<I>(pub I);
 
@@ -238,6 +239,8 @@ where
     }
 }
 
+/// Constraint which inverts a constraint.
+/// If a constraint `C` is unsatisfiable than `Not(C)` is satisfiable and vice versa.
 #[derive(Debug, Clone)]
 pub struct Not<C>(pub C);
 
@@ -310,7 +313,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         let r = lit.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert_eq!(repr, r);
@@ -330,7 +333,7 @@ mod tests {
 
         let repr = lit.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -350,7 +353,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         let r = lit.encode_constraint_equals_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert_eq!(repr, r);
@@ -371,7 +374,7 @@ mod tests {
 
         let r = clause.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -391,7 +394,7 @@ mod tests {
 
         let r = clause.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -411,7 +414,7 @@ mod tests {
 
         let r = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         dbg!(r);
@@ -432,7 +435,7 @@ mod tests {
 
         let r = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -470,7 +473,7 @@ mod tests {
 
         let r = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         dbg!(r);
@@ -492,7 +495,7 @@ mod tests {
 
         let r = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -543,7 +546,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -572,7 +575,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 

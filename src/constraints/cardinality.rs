@@ -82,8 +82,7 @@ where
     prev_s
 }
 
-/// This constraint encodes the requirement that at most `k` of `lits` variables
-/// are true.
+/// This constraint encodes the requirement that at most `k` of `lits are true.
 #[derive(Clone)]
 pub struct AtMostK<I> {
     pub lits: I,
@@ -216,8 +215,7 @@ where
     }
 }
 
-/// This constraint encodes the requirement that at least `k` of `lits` variables
-/// are true.
+/// This constraint encodes the requirement that at least `k` of `lits` are true.
 #[derive(Clone)]
 pub struct AtLeastK<I> {
     pub lits: I,
@@ -337,8 +335,7 @@ where
     }
 }
 
-/// This constraint encodes the requirement that exactly `k` of `lits` variables
-/// are true.
+/// This constraint encodes the requirement that exactly `k` of `lits` are true.
 #[derive(Clone)]
 pub struct ExactlyK<I> {
     pub lits: I,
@@ -460,8 +457,8 @@ where
     }
 }
 
-/// Constraint to ensure that several sets of literals have each the same number of true
-/// values.
+/// Constraint to ensure that several sets of literals have all the same number of true
+/// literals.
 #[derive(Clone, Debug)]
 pub struct SameCardinality<V> {
     lits: Vec<Vec<VarType<V>>>,
@@ -601,6 +598,8 @@ fn encode_same_cardinality_repr<V: SatVar>(
     repr
 }
 
+/// Constraint which encodes that fewer literals are true in `smaller` than in `larger`.
+/// literals.
 #[derive(Clone)]
 pub struct LessCardinality<I1, I2> {
     larger: I1,
@@ -768,7 +767,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert_ne!(repr, 0);
@@ -795,7 +794,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -823,7 +822,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         constraint.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -846,7 +845,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -954,7 +953,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert!(repr > 0);
@@ -980,7 +979,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert!(repr > 0);
@@ -1012,7 +1011,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         constraint.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -1039,7 +1038,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert_ne!(repr, 0);
@@ -1103,7 +1102,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert!(repr > 0);
@@ -1126,7 +1125,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert!(repr > 0);
@@ -1155,7 +1154,7 @@ mod tests {
         let repr = encoder.varmap.new_var();
         constraint.encode_constraint_implies_repr(
             Some(repr),
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -1182,7 +1181,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
         assert_ne!(repr, 0);
@@ -1358,7 +1357,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -1397,7 +1396,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -1439,7 +1438,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -1487,7 +1486,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 

@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use crate::{Lit, SatVar, VarType};
 
 /// Mapper from user defined variables and integer sat variables.
+///
+/// `VarMap` is serializable if the `serde` feature in enabled.
 pub struct VarMap<V> {
     forward: HashMap<V, i32>,
     reverse: HashMap<i32, V>,
@@ -38,8 +40,8 @@ impl<V: Debug> Debug for VarMap<V> {
 }
 
 impl<V: SatVar> VarMap<V> {
-    /// Translates an element of type `V` to a integer SAT variable used by the
-    /// backend solver.
+    /// Translates a value of type `V` to a integer SAT variable used by the
+    /// backend.
     /// If `var` wasn't already used it generates a new SAT variable.
     /// Depending on whether `var` is `Pos` or `Neg` the returned value is
     /// positive or negative.
@@ -88,6 +90,7 @@ impl<V: SatVar> VarMap<V> {
     }
 
     /// Lookup the correct `V` based on the integer SAT variable.
+    /// Like `add_var` it keeps the polarity of the input.
     pub fn lookup(&self, lit: i32) -> Option<Lit<V>> {
         let var = self.reverse.get(&lit.abs())?.clone();
 
@@ -104,7 +107,7 @@ impl<V: SatVar> VarMap<V> {
 }
 
 impl<V> VarMap<V> {
-    /// Generates fresh (unused) SAT variable.
+    /// Generates fresh (unused) SAT integer variable.
     pub fn new_var(&mut self) -> i32 {
         let id = self.next_id;
         self.next_id += 1;
