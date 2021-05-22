@@ -112,7 +112,7 @@ impl<V> VarMap<V> {
     }
 }
 
-#[cfg(features = "serde")]
+#[cfg(feature = "serde")]
 mod serde {
     use super::*;
     use ::serde::{
@@ -272,7 +272,7 @@ mod serde {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serde"))]
 mod tests {
     use super::VarMap;
     use crate::Lit::*;
