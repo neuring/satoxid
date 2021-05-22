@@ -19,6 +19,7 @@ pub struct Expr<V> {
 }
 
 impl<V: SatVar> Expr<V> {
+    /// Create new `Expr` from given constraint.
     pub fn from_constraint<C>(constraint: C) -> Self
     where
         C: ConstraintRepr<V> + 'static,
@@ -28,6 +29,19 @@ impl<V: SatVar> Expr<V> {
         }
     }
 }
+
+impl<V: SatVar> Expr<V> {
+    /// Create new `Expr` from literal.
+    pub fn new<L>(l: L) -> Self
+    where
+        L: Into<VarType<V>>,
+    {
+        Self {
+            inner: ExprEnum::Lit(l.into()),
+        }
+    }
+}
+
 impl<V: SatVar> Constraint<V> for Expr<V> {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         self.inner.encode(solver, varmap)
@@ -41,7 +55,8 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.inner.encode_constraint_implies_repr(repr, solver, varmap)
+        self.inner
+            .encode_constraint_implies_repr(repr, solver, varmap)
     }
 
     fn encode_constraint_equals_repr<S: Backend>(
@@ -50,7 +65,8 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.inner.encode_constraint_equals_repr(repr, solver, varmap)
+        self.inner
+            .encode_constraint_equals_repr(repr, solver, varmap)
     }
 
     fn encode_constraint_repr_cheap<S: Backend>(
@@ -59,7 +75,8 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         solver: &mut S,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.inner.encode_constraint_repr_cheap(repr, solver, varmap)
+        self.inner
+            .encode_constraint_repr_cheap(repr, solver, varmap)
     }
 }
 
@@ -491,8 +508,8 @@ mod tests {
         };
         let filled_cond = AtLeastK { k: 3, lits: vars };
 
-        let e = Expr::from_constraint(filled_cond)
-            | Expr::from_constraint(empty_cond);
+        let e =
+            Expr::from_constraint(filled_cond) | Expr::from_constraint(empty_cond);
 
         let mut encoder = CadicalEncoder::<u32>::new();
 
