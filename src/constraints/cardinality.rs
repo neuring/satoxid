@@ -601,7 +601,6 @@ fn encode_same_cardinality_repr<V: SatVar>(
 }
 
 /// Constraint which encodes that fewer literals are true in `smaller` than in `larger`.
-/// literals.
 #[derive(Clone)]
 pub struct LessCardinality<I1, I2> {
     larger: I1,

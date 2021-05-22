@@ -68,7 +68,7 @@ struct House {
     property: Property,
 }
 
-fn encode_every_house_has_one_of_each_property<P, B>(encoder: &mut Encoder<House, B>)
+fn encode_every_house_has_one_of_property<P, B>(encoder: &mut Encoder<House, B>)
 where
     P: Into<Property> + strum::IntoEnumIterator,
     <P as strum::IntoEnumIterator>::Iterator: Clone,
@@ -97,12 +97,12 @@ where
 }
 
 fn encode_general_rules(encoder: &mut Encoder<House, impl Backend>) {
-    // Every house as exactly one of each of the five properties.
-    encode_every_house_has_one_of_each_property::<Color, _>(encoder);
-    encode_every_house_has_one_of_each_property::<Nationality, _>(encoder);
-    encode_every_house_has_one_of_each_property::<Pet, _>(encoder);
-    encode_every_house_has_one_of_each_property::<Drink, _>(encoder);
-    encode_every_house_has_one_of_each_property::<Cigarette, _>(encoder);
+    // Every house has exactly one of each of the five properties.
+    encode_every_house_has_one_of_property::<Color, _>(encoder);
+    encode_every_house_has_one_of_property::<Nationality, _>(encoder);
+    encode_every_house_has_one_of_property::<Pet, _>(encoder);
+    encode_every_house_has_one_of_property::<Drink, _>(encoder);
+    encode_every_house_has_one_of_property::<Cigarette, _>(encoder);
 
     // Every value of each property only appears once.
     encode_every_property_value_appears_once::<Color, _>(encoder);
