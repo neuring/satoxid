@@ -54,10 +54,10 @@ mod tests {
         super::repr_implies_constraint(
             constraint,
             repr,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
-        encoder.solver.add_clause(clause![repr]);
+        encoder.backend.add_clause(clause![repr]);
 
         let res = retry_until_unsat(&mut encoder, |model| {
             model.print_model();

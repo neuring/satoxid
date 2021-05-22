@@ -14,7 +14,7 @@ pub fn retry_until_unsat<V: SatVar + Ord>(
         let varmap = &mut encoder.varmap;
 
         encoder
-            .solver
+            .backend
             .add_clause(model.vars().map(|l| varmap.get_var(!l).unwrap()));
 
         counter += 1;
@@ -52,7 +52,7 @@ pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
 
         model.print_model();
 
-        let internal = &mut encoder.solver;
+        let internal = &mut encoder.backend;
 
         let vars = || model.vars().map(|l| varmap.get_var(l).unwrap());
 
@@ -82,7 +82,7 @@ pub fn constraint_implies_repr_tester<V: SatVar + Ord>(
         let clause: Vec<_> =
             model.vars().map(|l| varmap.get_var(!l).unwrap()).collect();
 
-        encoder.solver.add_clause(clause.into_iter());
+        encoder.backend.add_clause(clause.into_iter());
     }
 
     ConstraintTestResult {
@@ -109,7 +109,7 @@ pub fn constraint_equals_repr_tester<V: SatVar + Ord>(
 
         model.print_model();
 
-        let internal = &mut encoder.solver;
+        let internal = &mut encoder.backend;
 
         let vars = || model.vars().map(|l| varmap.get_var(l).unwrap());
 
@@ -137,7 +137,7 @@ pub fn constraint_equals_repr_tester<V: SatVar + Ord>(
         let clause: Vec<_> =
             model.vars().map(|l| varmap.get_var(!l).unwrap()).collect();
 
-        encoder.solver.add_clause(clause.into_iter());
+        encoder.backend.add_clause(clause.into_iter());
     }
 
     ConstraintTestResult {

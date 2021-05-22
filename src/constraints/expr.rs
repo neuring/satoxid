@@ -4,9 +4,7 @@ use std::{
 };
 
 use super::util::ClauseCollector;
-use crate::{
-    clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType,
-};
+use crate::{clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType};
 
 /// [Tseytin Encoding](https://en.wikipedia.org/wiki/Tseytin_transformation) of propositional logic formulas.
 ///
@@ -16,26 +14,122 @@ use crate::{
 ///
 /// **NOTE:** If you just want to 'and' or 'or' a bunch of literals use [`And`](crate::constraints::And) or [`Or`](crate::constraints::Or) for more efficient encodings.
 #[derive(Clone)]
-pub enum Expr<V> {
-    And(Box<Expr<V>>, Box<Expr<V>>),
-    Or(Box<Expr<V>>, Box<Expr<V>>),
-    Not(Box<Expr<V>>),
+pub struct Expr<V> {
+    inner: ExprEnum<V>,
+}
+
+impl<V: SatVar> Expr<V> {
+    pub fn from_constraint<C>(constraint: C) -> Self
+    where
+        C: ConstraintRepr<V> + 'static,
+    {
+        Self {
+            inner: ExprEnum::Constraint(ExprConstraint::new(constraint)),
+        }
+    }
+}
+impl<V: SatVar> Constraint<V> for Expr<V> {
+    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+        self.inner.encode(solver, varmap)
+    }
+}
+
+impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
+    fn encode_constraint_implies_repr<S: Backend>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.inner.encode_constraint_implies_repr(repr, solver, varmap)
+    }
+
+    fn encode_constraint_equals_repr<S: Backend>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.inner.encode_constraint_equals_repr(repr, solver, varmap)
+    }
+
+    fn encode_constraint_repr_cheap<S: Backend>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.inner.encode_constraint_repr_cheap(repr, solver, varmap)
+    }
+}
+
+impl<V: SatVar, L: Into<VarType<V>>> From<L> for Expr<V> {
+    fn from(l: L) -> Self {
+        Self {
+            inner: ExprEnum::Lit(l.into()),
+        }
+    }
+}
+
+impl<V, R: Into<Self>> BitAnd<R> for Expr<V> {
+    type Output = Expr<V>;
+
+    fn bitand(self, rhs: R) -> Self::Output {
+        let rhs = rhs.into();
+        Self {
+            inner: ExprEnum::And(Box::new(self.inner), Box::new(rhs.inner)),
+        }
+    }
+}
+
+impl<V, R: Into<Self>> BitOr<R> for Expr<V> {
+    type Output = Expr<V>;
+
+    fn bitor(self, rhs: R) -> Self::Output {
+        let rhs = rhs.into();
+        Self {
+            inner: ExprEnum::Or(Box::new(self.inner), Box::new(rhs.inner)),
+        }
+    }
+}
+
+impl<V> Not for Expr<V> {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self {
+            inner: ExprEnum::Not(Box::new(self.inner)),
+        }
+    }
+}
+
+impl<V: Debug> Debug for Expr<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.inner.fmt(f)
+    }
+}
+
+#[derive(Clone)]
+enum ExprEnum<V> {
+    And(Box<ExprEnum<V>>, Box<ExprEnum<V>>),
+    Or(Box<ExprEnum<V>>, Box<ExprEnum<V>>),
+    Not(Box<ExprEnum<V>>),
     Lit(VarType<V>),
     Constraint(ExprConstraint<V>),
 }
 
-impl<V: Debug> Debug for Expr<V> {
+impl<V: Debug> Debug for ExprEnum<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::And(lhs, rhs) => {
+            ExprEnum::And(lhs, rhs) => {
                 f.debug_tuple("And").field(&lhs).field(&rhs).finish()
             }
-            Expr::Or(lhs, rhs) => {
+            ExprEnum::Or(lhs, rhs) => {
                 f.debug_tuple("Or").field(&lhs).field(&rhs).finish()
             }
-            Expr::Not(e) => f.debug_tuple("Neg").field(&e).finish(),
-            Expr::Lit(lit) => f.debug_tuple("Lit").field(&lit).finish(),
-            Expr::Constraint(constraint) => {
+            ExprEnum::Not(e) => f.debug_tuple("Neg").field(&e).finish(),
+            ExprEnum::Lit(lit) => f.debug_tuple("Lit").field(&lit).finish(),
+            ExprEnum::Constraint(constraint) => {
                 f.debug_tuple("Constraint").field(&constraint.0).finish()
             }
         }
@@ -62,15 +156,6 @@ impl<V: SatVar> ExprConstraint<V> {
         C: ConstraintRepr<V> + Clone + 'static,
     {
         Self(Box::new(constraint))
-    }
-}
-
-impl<V: SatVar> Expr<V> {
-    pub fn from_constraint<C>(constraint: C) -> Self
-    where
-        C: ConstraintRepr<V> + 'static,
-    {
-        Self::Constraint(ExprConstraint::new(constraint))
     }
 }
 
@@ -105,10 +190,10 @@ where
     }
 }
 
-impl<V: SatVar> Expr<V> {
+impl<V: SatVar> ExprEnum<V> {
     fn encode_tree<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) -> i32 {
         match self {
-            Expr::Or(lhs, rhs) => {
+            ExprEnum::Or(lhs, rhs) => {
                 let lhs_var = lhs.encode_tree(solver, varmap);
                 let rhs_var = rhs.encode_tree(solver, varmap);
                 let new_var = varmap.new_var();
@@ -119,7 +204,7 @@ impl<V: SatVar> Expr<V> {
 
                 new_var
             }
-            Expr::And(lhs, rhs) => {
+            ExprEnum::And(lhs, rhs) => {
                 let lhs_var = lhs.encode_tree(solver, varmap);
                 let rhs_var = rhs.encode_tree(solver, varmap);
                 let new_var = varmap.new_var();
@@ -130,15 +215,15 @@ impl<V: SatVar> Expr<V> {
 
                 new_var
             }
-            Expr::Not(e) => {
+            ExprEnum::Not(e) => {
                 let new_var = varmap.new_var();
                 let e = e.encode_tree(solver, varmap);
                 solver.add_clause(clause!(-e, -new_var));
                 solver.add_clause(clause!(e, new_var));
                 new_var
             }
-            Expr::Lit(e) => varmap.add_var(e),
-            Expr::Constraint(constraint) => {
+            ExprEnum::Lit(e) => varmap.add_var(e),
+            ExprEnum::Constraint(constraint) => {
                 let mut collector = ClauseCollector::default();
                 let repr = constraint.0.encode_repr(&mut collector, varmap);
 
@@ -152,46 +237,14 @@ impl<V: SatVar> Expr<V> {
     }
 }
 
-impl<V: SatVar, L: Into<VarType<V>>> From<L> for Expr<V> {
-    fn from(l: L) -> Self {
-        Self::Lit(l.into())
-    }
-}
-
-impl<V, R: Into<Self>> BitAnd<R> for Expr<V> {
-    type Output = Expr<V>;
-
-    fn bitand(self, rhs: R) -> Self::Output {
-        let rhs = rhs.into();
-        Self::And(Box::new(self), Box::new(rhs))
-    }
-}
-
-impl<V, R: Into<Self>> BitOr<R> for Expr<V> {
-    type Output = Expr<V>;
-
-    fn bitor(self, rhs: R) -> Self::Output {
-        let rhs = rhs.into();
-        Self::Or(Box::new(self), Box::new(rhs))
-    }
-}
-
-impl<V> Not for Expr<V> {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
-        Self::Not(Box::new(self))
-    }
-}
-
-impl<V: SatVar> Constraint<V> for Expr<V> {
+impl<V: SatVar> Constraint<V> for ExprEnum<V> {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let v = self.encode_tree(solver, varmap);
         solver.add_clause(clause!(v));
     }
 }
 
-impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
+impl<V: SatVar> ConstraintRepr<V> for ExprEnum<V> {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
@@ -235,7 +288,6 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
         self.encode_constraint_equals_repr(repr, solver, varmap)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -439,8 +491,8 @@ mod tests {
         };
         let filled_cond = AtLeastK { k: 3, lits: vars };
 
-        let e =
-            Expr::from_constraint(filled_cond) | Expr::from_constraint(empty_cond);
+        let e = Expr::from_constraint(filled_cond)
+            | Expr::from_constraint(empty_cond);
 
         let mut encoder = CadicalEncoder::<u32>::new();
 
@@ -448,10 +500,8 @@ mod tests {
 
         let res = retry_until_unsat(&mut encoder, |model| {
             model.print_model();
-            let empty_cond =
-                model.vars().filter(|l| l.is_pos()).count() == 0;
-            let filled_cond =
-                model.vars().filter(|l| l.is_pos()).count() >= 3;
+            let empty_cond = model.vars().filter(|l| l.is_pos()).count() == 0;
+            let filled_cond = model.vars().filter(|l| l.is_pos()).count() >= 3;
 
             assert!(filled_cond | empty_cond);
         });

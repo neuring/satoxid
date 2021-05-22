@@ -153,7 +153,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
@@ -191,7 +191,7 @@ mod tests {
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
-            &mut encoder.solver,
+            &mut encoder.backend,
             &mut encoder.varmap,
         );
 
