@@ -295,9 +295,15 @@ impl<V> Not for VarType<V> {
     }
 }
 
-impl<V> From<Lit<V>> for VarType<V> {
+impl<V: SatVar> From<Lit<V>> for VarType<V> {
     fn from(l: Lit<V>) -> Self {
         VarType::Named(l)
+    }
+}
+
+impl<V: SatVar> From<V> for VarType<V> {
+    fn from(v: V) -> Self {
+        VarType::Named(Lit::Pos(v))
     }
 }
 

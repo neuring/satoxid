@@ -49,7 +49,7 @@ mod tests {
         let k = 2;
         let constraint = AtMostK { k, lits };
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
         let repr = encoder.varmap.new_var();
         super::repr_implies_constraint(
             constraint,

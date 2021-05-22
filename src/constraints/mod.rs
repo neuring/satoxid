@@ -1,7 +1,7 @@
 use core::fmt;
 use std::fmt::Debug;
 
-use super::{Constraint, Lit, SatVar, VarMap};
+use super::{Constraint, SatVar, VarMap};
 use crate::{Backend, ConstraintRepr, VarType};
 
 mod cardinality;
@@ -26,63 +26,22 @@ macro_rules! clause {
     }
 }
 
-impl<V: SatVar> Constraint<V> for Lit<V> {
+impl<V, L> Constraint<V> for L
+where
+    V: SatVar,
+    L: Debug + Clone + Into<VarType<V>>,
+{
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let var = varmap.add_var(self);
         solver.add_clause(clause!(var));
     }
 }
 
-impl<V: SatVar> ConstraintRepr<V> for Lit<V> {
-    fn encode_constraint_implies_repr<S: Backend>(
-        self,
-        repr: Option<i32>,
-        solver: &mut S,
-        varmap: &mut VarMap<V>,
-    ) -> i32 {
-        let repr = repr.unwrap_or_else(|| varmap.new_var());
-        let var = varmap.add_var(self);
-
-        solver.add_clause(clause![-var, repr]);
-
-        repr
-    }
-
-    fn encode_constraint_equals_repr<S: Backend>(
-        self,
-        repr: Option<i32>,
-        solver: &mut S,
-        varmap: &mut VarMap<V>,
-    ) -> i32 {
-        let var = varmap.add_var(self);
-
-        if let Some(repr) = repr {
-            solver.add_clause(clause![-var, repr]);
-            solver.add_clause(clause![var, -repr]);
-            repr
-        } else {
-            var
-        }
-    }
-
-    fn encode_constraint_repr_cheap<S: Backend>(
-        self,
-        repr: Option<i32>,
-        solver: &mut S,
-        varmap: &mut VarMap<V>,
-    ) -> i32 {
-        self.encode_constraint_equals_repr(repr, solver, varmap)
-    }
-}
-
-impl<V: SatVar> Constraint<V> for VarType<V> {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        let var = varmap.add_var(self);
-        solver.add_clause(clause!(var));
-    }
-}
-
-impl<V: SatVar> ConstraintRepr<V> for VarType<V> {
+impl<V, L> ConstraintRepr<V> for L
+where
+    V: SatVar,
+    L: Debug + Clone + Into<VarType<V>>,
+{
     fn encode_constraint_implies_repr<S: Backend>(
         self,
         repr: Option<i32>,
@@ -405,7 +364,7 @@ mod tests {
 
     #[test]
     fn clause_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let clause = Or((1..=range).map(Lit::Pos));
@@ -425,7 +384,7 @@ mod tests {
 
     #[test]
     fn clause_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let clause = Or((1..=range).map(Lit::Pos));
@@ -445,7 +404,7 @@ mod tests {
 
     #[test]
     fn and_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<usize>::new();
 
         let range = 6;
         let constraint = And((1..=range).map(Lit::Pos));
@@ -466,7 +425,7 @@ mod tests {
 
     #[test]
     fn and_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<usize>::new();
 
         let range = 6;
         let constraint = And((1..=range).map(Lit::Pos));
@@ -486,7 +445,7 @@ mod tests {
 
     #[test]
     fn equal_constraint() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 7;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -504,7 +463,7 @@ mod tests {
 
     #[test]
     fn equal_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -526,7 +485,7 @@ mod tests {
 
     #[test]
     fn equal_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let constraint = Equal((1..=range).map(Lit::Pos));
@@ -547,7 +506,7 @@ mod tests {
 
     #[test]
     fn not_constraint() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let k = 3;
@@ -571,7 +530,7 @@ mod tests {
 
     #[test]
     fn not_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let k = 3;
@@ -600,7 +559,7 @@ mod tests {
 
     #[test]
     fn not_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 6;
         let k = 3;

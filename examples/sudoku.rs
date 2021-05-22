@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use itertools::iproduct;
-use sat_encoder::{CadicalEncoder, Encoder, Lit::Pos, Model, Backend, constraints::{AtLeastK, ExactlyK}};
+use sat_encoder::{
+    constraints::{AtLeastK, ExactlyK},
+    Backend, CadicalEncoder, Encoder, Model,
+};
 use structopt::StructOpt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,19 +18,17 @@ struct Tile {
 fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
     // Each Tile must have exactly one value
     for (x, y) in iproduct!(0..9, 0..9) {
-        let lits = (1..=9).map(|value| Pos(Tile { x, y, value }));
+        let lits = (1..=9).map(|value| Tile { x, y, value });
         let constraint = ExactlyK { k: 1, lits };
         encoder.add_constraint(constraint);
     }
 
     // Every value appears in every row.
     for (row, value) in iproduct!(0..9, 1..=9) {
-        let lits = (0..9).map(|col| {
-            Pos(Tile {
-                x: col,
-                y: row,
-                value,
-            })
+        let lits = (0..9).map(|col| Tile {
+            x: col,
+            y: row,
+            value,
         });
         let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
@@ -35,12 +36,10 @@ fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
 
     // Every value appears in every col.
     for (col, value) in iproduct!(0..9, 1..=9) {
-        let lits = (0..9).map(|row| {
-            Pos(Tile {
-                x: col,
-                y: row,
-                value,
-            })
+        let lits = (0..9).map(|row| Tile {
+            x: col,
+            y: row,
+            value,
         });
         let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
@@ -48,12 +47,10 @@ fn encode_sudoku_rules(encoder: &mut Encoder<Tile, impl Backend>) {
 
     // Every value appears in every 3x3 square.
     for (square_x, square_y, value) in iproduct!(0..3, 0..3, 1..=9) {
-        let lits = iproduct!(0..3, 0..3).map(|(x, y)| {
-            Pos(Tile {
-                x: 3 * square_x + x,
-                y: 3 * square_y + y,
-                value,
-            })
+        let lits = iproduct!(0..3, 0..3).map(|(x, y)| Tile {
+            x: 3 * square_x + x,
+            y: 3 * square_y + y,
+            value,
         });
         let constraint = AtLeastK { k: 1, lits };
         encoder.add_constraint(constraint);
@@ -125,7 +122,7 @@ fn main() -> anyhow::Result<()> {
 
     // Set defined tiles.
     for (&(x, y), &value) in sudoku.iter() {
-        encoder.add_constraint(Pos(Tile { x, y, value }))
+        encoder.add_constraint(Tile { x, y, value })
     }
 
     if let Some(model) = encoder.solve() {

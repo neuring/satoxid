@@ -1,7 +1,6 @@
 use sat_encoder::{
     constraints::{AtLeastK, ExactlyK, If, Or},
     Backend, CadicalEncoder, Encoder,
-    Lit::Pos,
 };
 use strum::IntoEnumIterator;
 
@@ -76,8 +75,7 @@ macro_rules! every_house_has_one_of_each_property {
                 .map(|property| House {
                     number: house_number,
                     property,
-                })
-                .map(Pos);
+                });
             $encoder.add_constraint(ExactlyK { k: 1, lits });
         }
     };
@@ -90,8 +88,7 @@ macro_rules! every_property_value_appears_once {
                 .map(|number| House {
                     number,
                     property: Property::$prop(p),
-                })
-                .map(Pos);
+                });
             $encoder.add_constraint(AtLeastK { k: 1, lits });
         }
     };
@@ -117,14 +114,14 @@ macro_rules! if_then_constraint {
     ($ifprop:ident :: $ifvalue:ident, $thenprop:ident :: $thenvalue:ident, $encoder:expr) => {
         for number in 0..5 {
             $encoder.add_constraint(If {
-                cond: Pos(House {
+                cond: House {
                     number,
                     property: Property::$ifprop($ifprop::$ifvalue),
-                }),
-                then: Pos(House {
+                },
+                then: House {
                     number,
                     property: Property::$thenprop($thenprop::$thenvalue),
-                }),
+                },
             })
         }
     };
@@ -138,19 +135,19 @@ macro_rules! neighbor_if_then_constraint {
                 .map(|i| number + i)
                 .filter(|&i| 0 <= i && i < 5)
                 .map(|neighbor_number| {
-                    Pos(House {
+                    House {
                         number: neighbor_number as u32,
                         property: Property::$thenprop($thenprop::$thenvalue),
-                    })
+                    }
                 });
 
             let number = number as u32;
 
             $encoder.add_constraint(If {
-                cond: Pos(House {
+                cond: House {
                     number,
                     property: Property::$ifprop($ifprop::$ifvalue),
-                }),
+                },
                 then: Or(neighbors),
             });
         }
@@ -170,14 +167,14 @@ fn encode_specific_rules(encoder: &mut Encoder<House, impl Backend>) {
     // 4. The green house is just to the left of the white one.
     for number in 0..4 {
         encoder.add_constraint(If {
-            cond: Pos(House {
+            cond: House {
                 number,
                 property: Property::Color(Color::Green),
-            }),
-            then: Pos(House {
+            },
+            then: House {
                 number: number + 1,
                 property: Property::Color(Color::White),
-            }),
+            },
         });
     }
 
@@ -191,16 +188,16 @@ fn encode_specific_rules(encoder: &mut Encoder<House, impl Backend>) {
     if_then_constraint!(Color::Yellow, Cigarette::Dunhills, encoder);
 
     // 8. The man in the center house drinks milk.
-    encoder.add_constraint(Pos(House {
+    encoder.add_constraint(House {
         number: 2,
         property: Property::Drink(Drink::Milk),
-    }));
+    });
 
     // 9. The Norwegian lives in the first house.
-    encoder.add_constraint(Pos(House {
+    encoder.add_constraint(House {
         number: 0,
         property: Property::Nationality(Nationality::Norwegian),
-    }));
+    });
 
     // 10. The Blend smoker has a neighbor who keeps cats.
     neighbor_if_then_constraint!(Cigarette::Blend, Pet::Cats, encoder);

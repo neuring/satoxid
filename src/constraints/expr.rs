@@ -5,7 +5,7 @@ use std::{
 
 use super::util::ClauseCollector;
 use crate::{
-    clause, Backend, Constraint, ConstraintRepr, Lit, SatVar, VarMap, VarType,
+    clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType,
 };
 
 /// Tseitin Encoding of propositional logic formulas.
@@ -146,15 +146,9 @@ impl<V: SatVar> Expr<V> {
     }
 }
 
-impl<V> From<Lit<V>> for Expr<V> {
-    fn from(v: Lit<V>) -> Self {
-        Self::Lit(VarType::Named(v))
-    }
-}
-
-impl<V> From<VarType<V>> for Expr<V> {
-    fn from(v: VarType<V>) -> Self {
-        Self::Lit(v)
+impl<V: SatVar, L: Into<VarType<V>>> From<L> for Expr<V> {
+    fn from(l: L) -> Self {
+        Self::Lit(l.into())
     }
 }
 
@@ -225,7 +219,17 @@ impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
             r
         }
     }
+
+    fn encode_constraint_repr_cheap<S: Backend>(
+        self,
+        repr: Option<i32>,
+        solver: &mut S,
+        varmap: &mut VarMap<V>,
+    ) -> i32 {
+        self.encode_constraint_equals_repr(repr, solver, varmap)
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -246,43 +250,43 @@ mod tests {
 
     #[test]
     fn expr_and() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
-        let expr = lit & Pos(2) & Pos(3);
+        let expr = lit & 2 & 3;
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         encoder.add_constraint(expr);
 
         let res = retry_until_unsat(&mut encoder, |model| {
-            assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() == 3)
+            assert!(model.vars().filter(|l| l.is_pos()).count() == 3)
         });
         assert_eq!(res, 1);
     }
 
     #[test]
     fn expr_or() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
-        let expr = lit | Pos(2) | Pos(3);
+        let expr = lit | 2 | 3;
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         encoder.add_constraint(expr);
 
         let res = retry_until_unsat(&mut encoder, |model| {
-            assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() > 0);
+            assert!(model.vars().filter(|l| l.is_pos()).count() > 0);
         });
         assert_eq!(res, 7);
     }
 
     #[test]
     fn expr_neg() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
         let expr = !lit;
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         encoder.add_constraint(expr);
 
@@ -294,11 +298,11 @@ mod tests {
 
     #[test]
     fn expr_combined() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
-        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
+        let expr = lit.clone() & 2 | !lit & 3;
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         encoder.add_constraint(expr);
 
@@ -315,28 +319,28 @@ mod tests {
 
     #[test]
     fn expr_constraint() {
-        let vars = (0..5).map(Pos);
+        let vars = 0..5;
         let constraint = AtMostK { k: 3, lits: vars };
 
-        let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
+        let e = Expr::from_constraint(constraint) & 3 & Neg(4);
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
         encoder.add_constraint(e);
 
         let res = retry_until_unsat(&mut encoder, |model| {
             assert!(model.lit(Neg(4)).unwrap());
             assert!(model.lit(Pos(3)).unwrap());
 
-            assert!(model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3);
+            assert!(model.vars().filter(|l| l.is_pos()).count() <= 3);
         });
         assert_eq!(res, 7);
     }
 
     #[test]
     fn expr_implies_repr() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
-        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
+        let expr = lit.clone() & 2 | !lit & 3;
 
         let mut encoder = CadicalEncoder::new();
 
@@ -361,11 +365,11 @@ mod tests {
 
     #[test]
     fn expr_equals_repr() {
-        let lit = Expr::from(Pos(1));
+        let lit = Expr::from(1);
 
-        let expr = lit.clone() & Pos(2) | !lit & Pos(3);
+        let expr = lit.clone() & 2 | !lit & 3;
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let repr = encoder.varmap.new_var();
         expr.encode_constraint_equals_repr(
@@ -390,12 +394,12 @@ mod tests {
     fn expr_constraint_implies_repr() {
         let range = 5;
         let k = 3;
-        let vars = (0..range).map(Pos);
+        let vars = 0..range;
         let constraint = AtMostK { k, lits: vars };
 
         let e = Expr::from_constraint(constraint) & Pos(3) & Neg(4);
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let repr = encoder.varmap.new_var();
         e.encode_constraint_implies_repr(
@@ -407,7 +411,7 @@ mod tests {
         let res = constraint_implies_repr_tester(&mut encoder, repr, |model| {
             let a = model.lit(Neg(4)).unwrap();
             let b = model.lit(Pos(3)).unwrap();
-            let c = model.vars().filter(|l| matches!(l, Pos(_))).count() <= 3;
+            let c = model.vars().filter(|l| l.is_pos()).count() <= 3;
 
             a && b && c
         });
@@ -421,7 +425,7 @@ mod tests {
     #[test]
     fn expr_constraint_or() {
         let range = 4;
-        let vars = (0..range).map(Pos);
+        let vars = 0..range;
 
         let empty_cond = AtMostK {
             k: 0,
@@ -432,16 +436,16 @@ mod tests {
         let e =
             Expr::from_constraint(filled_cond) | Expr::from_constraint(empty_cond);
 
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         encoder.add_constraint(e);
 
         let res = retry_until_unsat(&mut encoder, |model| {
             model.print_model();
             let empty_cond =
-                model.vars().filter(|l| matches!(l, Pos(_))).count() == 0;
+                model.vars().filter(|l| l.is_pos()).count() == 0;
             let filled_cond =
-                model.vars().filter(|l| matches!(l, Pos(_))).count() >= 3;
+                model.vars().filter(|l| l.is_pos()).count() >= 3;
 
             assert!(filled_cond | empty_cond);
         });

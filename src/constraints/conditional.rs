@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn if_then_simple() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let cond = Pos(5);
         let then = Pos(6);
@@ -116,15 +116,15 @@ mod tests {
 
     #[test]
     fn if_then_with_constraints() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let cond = AtMostK {
             k: 2,
-            lits: (1..=5).map(Pos),
+            lits: 1..=5,
         };
         let then = AtMostK {
             k: 2,
-            lits: (3..=7).map(Pos),
+            lits: 3..=7,
         };
 
         encoder.add_constraint(If { cond, then });
@@ -140,15 +140,15 @@ mod tests {
 
     #[test]
     fn if_then_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 5;
         let k = 3;
         let cond = AtMostK {
             k,
-            lits: (0..range).map(Pos),
+            lits: 0..range,
         };
-        let then = Pos(range);
+        let then = range;
         let constraint = If { cond, then };
 
         let repr = constraint.encode_constraint_implies_repr(
@@ -161,7 +161,7 @@ mod tests {
             let cond = model
                 .vars()
                 .filter(|l| (0..range).contains(&l.unwrap()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count()
                 <= k as usize;
             let then = model.var(range).unwrap();
@@ -178,13 +178,13 @@ mod tests {
 
     #[test]
     fn if_then_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 5;
         let k = 3;
         let cond = AtMostK {
             k,
-            lits: (0..range).map(Pos),
+            lits: 0..range,
         };
         let then = Pos(range);
         let constraint = If { cond, then };
@@ -199,7 +199,7 @@ mod tests {
             let cond = model
                 .vars()
                 .filter(|l| (0..range).contains(&l.unwrap()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count()
                 <= k as usize;
             let then = model.var(range).unwrap();

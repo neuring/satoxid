@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn serde_test() {
 
-        let mut varmap = VarMap::default();
+        let mut varmap = VarMap::<SatVar>::default();
 
         varmap.add_var(Pos(SatVar::A(0, true)));
         varmap.add_var(Pos(SatVar::A(1, true)));

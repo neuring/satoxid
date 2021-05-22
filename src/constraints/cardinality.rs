@@ -704,16 +704,15 @@ mod tests {
             Equal,
         },
         CadicalEncoder,
-        Lit::*,
     };
 
     #[test]
     fn normal_atmostk() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
         encoder.add_constraint(AtMostK { k, lits });
 
@@ -729,9 +728,9 @@ mod tests {
 
     #[test]
     fn normal_atmost0() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
-        let lits = (1..=10).map(|i| Pos(i));
+        let lits = 1..=10;
         let k = 0;
 
         encoder.add_constraint(AtMostK { k, lits });
@@ -745,9 +744,9 @@ mod tests {
 
     #[test]
     fn normal_atmost_one_literal() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
-        let lits = std::iter::once(Pos(1));
+        let lits = std::iter::once(1);
         let k = 1;
 
         encoder.add_constraint(AtMostK { k, lits });
@@ -760,11 +759,11 @@ mod tests {
 
     #[test]
     fn atmostk_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
         let constraint = AtMostK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
@@ -786,11 +785,11 @@ mod tests {
 
     #[test]
     fn atmostk_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
         let constraint = AtMostK { k, lits };
 
@@ -813,11 +812,11 @@ mod tests {
 
     #[test]
     fn atmost0_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
         let constraint = AtMostK { k, lits };
 
@@ -837,11 +836,11 @@ mod tests {
 
     #[test]
     fn atmost0_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
         let constraint = AtMostK { k, lits };
 
@@ -864,11 +863,11 @@ mod tests {
 
     #[test]
     fn normal_at_least_k() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (0..range).map(|i| Pos(i));
+        let lits = 0..range;
 
         encoder.add_constraint(AtLeastK { k, lits });
 
@@ -887,10 +886,10 @@ mod tests {
 
     #[test]
     fn normal_at_least_one_literal() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let k = 1;
-        let lits = std::iter::once(Pos(1));
+        let lits = std::iter::once(1);
 
         encoder.add_constraint(AtLeastK { k, lits });
 
@@ -901,17 +900,17 @@ mod tests {
 
     #[test]
     fn normal_at_least_0() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 5;
         let k = 0;
-        let lits = (0..range).map(Pos);
+        let lits = 0..range;
 
         // Because AtLeast 0 shouldn't encode anything we add an equivalent var for
         // each var so every var appears in the resulting set of clauses.
         // Otherwise the sat solver has no variables and just returns an empty set as
         // the only solution.
-        for (l1, l2) in lits.clone().zip((range..2 * range).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range..2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -929,11 +928,11 @@ mod tests {
 
     #[test]
     fn normal_at_least_1() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 5;
         let k = 1;
-        let lits = (0..range).map(Pos);
+        let lits = 0..range;
 
         encoder.add_constraint(AtLeastK { k, lits });
 
@@ -946,11 +945,11 @@ mod tests {
 
     #[test]
     fn at_least_k_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 6;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
         let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
@@ -972,11 +971,11 @@ mod tests {
 
     #[test]
     fn at_least_k_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
         let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
@@ -998,13 +997,13 @@ mod tests {
 
     #[test]
     fn at_least_0_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
-        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range + 1..=2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -1026,13 +1025,13 @@ mod tests {
 
     #[test]
     fn at_least_0_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
-        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range + 1..=2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -1057,11 +1056,11 @@ mod tests {
 
     #[test]
     fn normal_exactlyk() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (0..range).map(|i| Pos(i));
+        let lits = 0..range;
 
         encoder.add_constraint(ExactlyK { k, lits });
 
@@ -1074,13 +1073,13 @@ mod tests {
 
     #[test]
     fn normal_exactly0() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 5;
         let k = 0;
-        let lits = (0..range).map(Pos);
+        let lits = 0..range;
 
-        for (l1, l2) in lits.clone().zip((range..2 * range).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range..2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -1095,11 +1094,11 @@ mod tests {
 
     #[test]
     fn exactlyk_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 6;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
         let constraint = ExactlyK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
@@ -1118,11 +1117,11 @@ mod tests {
 
     #[test]
     fn exactlyk_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 5;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
         let constraint = ExactlyK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
@@ -1141,13 +1140,13 @@ mod tests {
 
     #[test]
     fn exactly0_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
-        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range + 1..=2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -1169,13 +1168,13 @@ mod tests {
 
     #[test]
     fn exactly0_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range = 10;
         let k = 0;
-        let lits = (1..=range).map(|i| Pos(i));
+        let lits = 1..=range;
 
-        for (l1, l2) in lits.clone().zip(((range + 1)..=(2 * range)).map(Pos)) {
+        for (l1, l2) in lits.clone().zip(range + 1..=2 * range) {
             encoder.add_constraint(Equal(vec![l1, l2].into_iter()));
         }
 
@@ -1197,14 +1196,14 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range).map(Pos))
-            .add_lits((range..2 * range).map(Pos));
+            .add_lits(0..range)
+            .add_lits(range..2 * range);
 
         encoder.add_constraint(constraint);
 
@@ -1213,12 +1212,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range..2 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             assert_eq!(c1, c2);
         });
@@ -1231,15 +1230,15 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality_one_large_size() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range1: u32 = 1;
         let range2: u32 = 5;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range1).map(Pos))
-            .add_lits((range1..range1 + range2).map(Pos));
+            .add_lits(0..range1)
+            .add_lits(range1..range1 + range2);
 
         encoder.add_constraint(constraint);
 
@@ -1248,12 +1247,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range1).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range1..range1 + range2).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             assert_eq!(c1, c2);
         });
@@ -1263,15 +1262,15 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality_different_sizes() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range1: u32 = 3;
         let range2: u32 = 5;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range1).map(Pos))
-            .add_lits((range1..range1 + range2).map(Pos));
+            .add_lits(0..range1)
+            .add_lits(range1..range1 + range2);
 
         encoder.add_constraint(constraint);
 
@@ -1280,12 +1279,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range1).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range1..range1 + range2).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             assert_eq!(c1, c2);
         });
@@ -1300,16 +1299,16 @@ mod tests {
 
     #[test]
     fn normal_same_cardinality_but_more() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 3;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range).map(Pos))
-            .add_lits((range..2 * range).map(Pos))
-            .add_lits((2 * range..3 * range).map(Pos))
-            .add_lits((3 * range..4 * range).map(Pos));
+            .add_lits(0..range)
+            .add_lits(range..2 * range)
+            .add_lits(2 * range..3 * range)
+            .add_lits(3 * range..4 * range);
 
         encoder.add_constraint(constraint);
 
@@ -1318,22 +1317,22 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range..2 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c3 = model
                 .vars()
                 .filter(|l| (2 * range..3 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c4 = model
                 .vars()
                 .filter(|l| (3 * range..4 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             assert_eq!(c1, c2);
             assert_eq!(c1, c3);
@@ -1348,14 +1347,14 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range).map(Pos))
-            .add_lits((range..2 * range).map(Pos));
+            .add_lits(0..range)
+            .add_lits(range..2 * range);
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
@@ -1367,12 +1366,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range..2 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             c1 == c2
         });
@@ -1386,15 +1385,15 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr_different_sizes() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range1: u32 = 5;
         let range2: u32 = 3;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range1).map(Pos))
-            .add_lits((range1..range1 + range2).map(Pos));
+            .add_lits(0..range1)
+            .add_lits(range1..range1 + range2);
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
@@ -1406,12 +1405,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range1).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range1..range1 + range2).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             c1 == c2
         });
@@ -1427,16 +1426,16 @@ mod tests {
 
     #[test]
     fn same_cardinality_implies_repr_but_more() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 3;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range).map(Pos))
-            .add_lits((range..2 * range).map(Pos))
-            .add_lits((2 * range..3 * range).map(Pos))
-            .add_lits((3 * range..4 * range).map(Pos));
+            .add_lits(0..range)
+            .add_lits(range..2 * range)
+            .add_lits(2 * range..3 * range)
+            .add_lits(3 * range..4 * range);
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
@@ -1448,22 +1447,22 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range..2 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c3 = model
                 .vars()
                 .filter(|l| (2 * range..3 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c4 = model
                 .vars()
                 .filter(|l| (3 * range..4 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             c1 == c2 && c1 == c3 && c1 == c4
         });
@@ -1477,14 +1476,14 @@ mod tests {
 
     #[test]
     fn same_cardinality_equals_repr() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
         constraint
-            .add_lits((0..range).map(Pos))
-            .add_lits((range..2 * range).map(Pos));
+            .add_lits(0..range)
+            .add_lits(range..2 * range);
 
         let repr = constraint.encode_constraint_equals_repr(
             None,
@@ -1496,12 +1495,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|l| (0..range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|l| (range..2 * range).contains(l.var()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             c1 == c2
         });
@@ -1515,13 +1514,13 @@ mod tests {
 
     #[test]
     fn less_cardinality_constraint() {
-        let mut encoder = CadicalEncoder::new();
+        let mut encoder = CadicalEncoder::<u32>::new();
 
         let range: u32 = 5;
 
         let constraint = LessCardinality {
-            larger: (0..range).map(Pos),
-            smaller: (range..2 * range).map(Pos),
+            larger: 0..range,
+            smaller: range..2 * range,
         };
 
         encoder.add_constraint(constraint);
@@ -1531,12 +1530,12 @@ mod tests {
             let c1 = model
                 .vars()
                 .filter(|v| (0..range).contains(&v.unwrap()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             let c2 = model
                 .vars()
                 .filter(|v| (range..2 * range).contains(&v.unwrap()))
-                .filter(|l| matches!(l, Pos(_)))
+                .filter(|l| l.is_pos())
                 .count();
             assert!(c1 > c2);
         });
