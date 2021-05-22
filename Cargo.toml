@@ -3,6 +3,12 @@ name = "satoxid"
 version = "0.1.0"
 authors = ["neuring <neuring@pm.me>"]
 edition = "2018"
+license = "MIT"
+description = "Boolean satisfiability problem encoding library written in rust."
+repository = "https://github.com/neuring/satoxid"
+readme = "README.md"
+keywords = ["satisfiability", "sat", "sat-solver", "dimacs"]
+categories = ["encoding"]
 
 [dependencies]
 cadical = { version = "0.1.13", optional = true }
