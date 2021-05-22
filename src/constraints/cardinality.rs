@@ -9,7 +9,7 @@ use crate::{
 /// Encodes a sequential counter used for all cardinality constraint types.
 /// Returns the k output vars which different constraints can constrain to
 /// achieve their respective behaviour.
-fn encode_cardinality_constraint<V, S, L, I>(
+fn encode_cardinality_constraint<V, S, I>(
     lits: I,
     k: u32,
     dir: Direction,
@@ -20,8 +20,8 @@ fn encode_cardinality_constraint<V, S, L, I>(
 where
     V: SatVar,
     S: Backend,
-    I: Iterator<Item = L>,
-    L: Into<VarType<V>>,
+    I: Iterator,
+    I::Item: Into<VarType<V>>,
 {
     assert!(k > 0);
     if let Some(out) = out {
@@ -89,11 +89,11 @@ pub struct AtMostK<I> {
     pub k: u32,
 }
 
-impl<V, L, I> Constraint<V> for AtMostK<I>
+impl<V, I> Constraint<V> for AtMostK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -116,11 +116,11 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for AtMostK<I>
+impl<V, I> ConstraintRepr<V> for AtMostK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -200,10 +200,10 @@ where
     }
 }
 
-impl<L: Debug, I> Debug for AtMostK<I>
+impl<I> Debug for AtMostK<I>
 where
-    L: Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -222,11 +222,11 @@ pub struct AtLeastK<I> {
     pub k: u32,
 }
 
-impl<V, L, I> Constraint<V> for AtLeastK<I>
+impl<V, I> Constraint<V> for AtLeastK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -246,11 +246,11 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for AtLeastK<I>
+impl<V, I> ConstraintRepr<V> for AtLeastK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -321,9 +321,10 @@ where
     }
 }
 
-impl<V: Debug, I> Debug for AtLeastK<I>
+impl<I> Debug for AtLeastK<I>
 where
-    I: Iterator<Item = V> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -342,11 +343,11 @@ pub struct ExactlyK<I> {
     pub k: u32,
 }
 
-impl<V, L, I> Constraint<V> for ExactlyK<I>
+impl<V, I> Constraint<V> for ExactlyK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         if self.k == 0 {
@@ -370,11 +371,11 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for ExactlyK<I>
+impl<V, I> ConstraintRepr<V> for ExactlyK<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -443,9 +444,10 @@ where
     }
 }
 
-impl<L: Debug, I> Debug for ExactlyK<I>
+impl<I> Debug for ExactlyK<I>
 where
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lits: Vec<_> = self.lits.clone().collect();
@@ -469,10 +471,10 @@ impl<V> SameCardinality<V> {
         Self { lits: Vec::new() }
     }
 
-    pub fn add_lits<I, L>(&mut self, lits: I) -> &mut Self
+    pub fn add_lits<I>(&mut self, lits: I) -> &mut Self
     where
-        L: Into<VarType<V>>,
-        I: Iterator<Item = L>,
+        I: Iterator,
+        I::Item: Into<VarType<V>>,
     {
         self.lits.push(lits.map(|l| l.into()).collect());
         self
@@ -606,13 +608,13 @@ pub struct LessCardinality<I1, I2> {
     smaller: I2,
 }
 
-impl<I1, I2, L1, L2, V> Constraint<V> for LessCardinality<I1, I2>
+impl<I1, I2, V> Constraint<V> for LessCardinality<I1, I2>
 where
     V: SatVar,
-    L1: Into<VarType<V>> + Debug,
-    L2: Into<VarType<V>> + Debug,
-    I1: Iterator<Item = L1> + Clone,
-    I2: Iterator<Item = L2> + Clone,
+    I1: Iterator + Clone,
+    I1::Item: Into<VarType<V>> + Debug,
+    I2: Iterator + Clone,
+    I2::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let larger = self.larger.collect::<Vec<_>>();

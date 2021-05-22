@@ -89,22 +89,22 @@ where
 #[derive(Clone)]
 pub struct Or<I>(pub I);
 
-impl<I, L, V> Constraint<V> for Or<I>
+impl<I, V> Constraint<V> for Or<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         solver.add_clause(self.0.map(|lit| varmap.add_var(lit.into())));
     }
 }
 
-impl<I, L, V> ConstraintRepr<V> for Or<I>
+impl<I, V> ConstraintRepr<V> for Or<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -124,10 +124,10 @@ where
     }
 }
 
-impl<I, V> Debug for Or<I>
+impl<I> Debug for Or<I>
 where
-    V: Debug,
-    I: Iterator<Item = V> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let list: Vec<_> = self.0.clone().collect();
@@ -139,11 +139,11 @@ where
 #[derive(Clone)]
 pub struct And<I>(pub I);
 
-impl<V, L, I> Constraint<V> for And<I>
+impl<V, I> Constraint<V> for And<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         for v in self.0 {
@@ -153,11 +153,11 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for And<I>
+impl<V, I> ConstraintRepr<V> for And<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -174,10 +174,10 @@ where
     }
 }
 
-impl<I, V> Debug for And<I>
+impl<I> Debug for And<I>
 where
-    V: Debug,
-    I: Iterator<Item = V> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let list: Vec<_> = self.0.clone().collect();
@@ -189,11 +189,11 @@ where
 #[derive(Clone)]
 pub struct Equal<I>(pub I);
 
-impl<V, L, I> Constraint<V> for Equal<I>
+impl<V, I> Constraint<V> for Equal<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
         let lits: Vec<_> = self.0.map(|l| varmap.add_var(l)).collect();
@@ -206,11 +206,11 @@ where
     }
 }
 
-impl<V, L, I> ConstraintRepr<V> for Equal<I>
+impl<V, I> ConstraintRepr<V> for Equal<I>
 where
     V: SatVar,
-    L: Into<VarType<V>> + Debug,
-    I: Iterator<Item = L> + Clone,
+    I: Iterator + Clone,
+    I::Item: Into<VarType<V>> + Debug,
 {
     fn encode_constraint_implies_repr<S: Backend>(
         self,
@@ -228,10 +228,10 @@ where
     }
 }
 
-impl<I, V> Debug for Equal<I>
+impl<I> Debug for Equal<I>
 where
-    V: Debug,
-    I: Iterator<Item = V> + Clone,
+    I: Iterator + Clone,
+    I::Item: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let list: Vec<_> = self.0.clone().collect();
