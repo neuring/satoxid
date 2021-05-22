@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::{Backend, Encoder, Solver};
 
-/// Encoder using the CaDiCal Sat solver.
+/// Encoder using the CaDiCal SAT solver.
 pub type CadicalEncoder<V> = Encoder<V, cadical::Solver>;
 
 impl Backend for cadical::Solver {
@@ -14,7 +14,11 @@ impl Backend for cadical::Solver {
     }
 
     fn add_debug_info<D: fmt::Debug>(&mut self, debug: D) {
-        println!("{:+?}", debug)
+        println!("{:#?}", debug)
+    }
+
+    fn append_debug_info<D: fmt::Debug>(&mut self, debug: D) {
+        println!("{:?}", debug)
     }
 }
 
