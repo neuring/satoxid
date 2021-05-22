@@ -1,5 +1,5 @@
 [package]
-name = "sat_encoder"
+name = "satoxid"
 version = "0.1.0"
 authors = ["neuring"]
 edition = "2018"
