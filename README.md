@@ -38,3 +38,5 @@ fn main() {
     }
 }
 ```
+
+For a more complex example see [this rummy solver](https://github.com/neuring/rummy_to_sat).
