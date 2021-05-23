@@ -220,25 +220,25 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 // trait.
 pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// Encode if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32;
 
     /// Encode if and only if `Self` is satisified, that `repr` is true.
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let clone = self.clone();
 
-        let repr = self.encode_constraint_implies_repr(repr, solver, varmap);
+        let repr = self.encode_constraint_implies_repr(repr, backend, varmap);
 
-        util::repr_implies_constraint(clone, repr, solver, varmap);
+        util::repr_implies_constraint(clone, repr, backend, varmap);
 
         repr
     }
@@ -247,13 +247,13 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// The semantics are less restrictive for to allow for cheaper encoding.
     /// No guarantees are given about the constraints of repr if the constraint is false.
     /// Usually it has either the semantics of implies_repr or equals_repr.
-    fn encode_constraint_repr_cheap<S: Backend>(
+    fn encode_constraint_repr_cheap<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.encode_constraint_implies_repr(repr, solver, varmap)
+        self.encode_constraint_implies_repr(repr, backend, varmap)
     }
 }
 

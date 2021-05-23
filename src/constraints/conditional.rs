@@ -19,12 +19,12 @@ where
     C: ConstraintRepr<V>,
     T: Constraint<V>,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
         let cond_repr = self
             .cond
-            .encode_constraint_repr_cheap(None, solver, varmap);
+            .encode_constraint_repr_cheap(None, backend, varmap);
 
-        util::repr_implies_constraint(self.then, cond_repr, solver, varmap);
+        util::repr_implies_constraint(self.then, cond_repr, backend, varmap);
     }
 }
 
@@ -34,46 +34,46 @@ where
     C: ConstraintRepr<V>,
     T: ConstraintRepr<V>,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
         let cond_repr = self
             .cond
-            .encode_constraint_equals_repr(None, solver, varmap);
+            .encode_constraint_equals_repr(None, backend, varmap);
         let then_repr = self
             .then
-            .encode_constraint_equals_repr(None, solver, varmap);
+            .encode_constraint_equals_repr(None, backend, varmap);
 
-        solver.add_clause(clause![cond_repr, repr]);
-        solver.add_clause(clause![-cond_repr, -then_repr, repr]);
+        backend.add_clause(clause![cond_repr, repr]);
+        backend.add_clause(clause![-cond_repr, -then_repr, repr]);
 
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
         let cond_repr = self
             .cond
-            .encode_constraint_equals_repr(None, solver, varmap);
+            .encode_constraint_equals_repr(None, backend, varmap);
         let then_repr = self
             .then
-            .encode_constraint_equals_repr(None, solver, varmap);
+            .encode_constraint_equals_repr(None, backend, varmap);
 
-        solver.add_clause(clause![cond_repr, repr]);
-        solver.add_clause(clause![-cond_repr, -then_repr, repr]);
+        backend.add_clause(clause![cond_repr, repr]);
+        backend.add_clause(clause![-cond_repr, -then_repr, repr]);
 
-        solver.add_clause(clause![then_repr, -cond_repr, -repr]);
+        backend.add_clause(clause![then_repr, -cond_repr, -repr]);
 
         repr
     }

@@ -43,40 +43,40 @@ impl<V: SatVar> Expr<V> {
 }
 
 impl<V: SatVar> Constraint<V> for Expr<V> {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        self.inner.encode(solver, varmap)
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
+        self.inner.encode(backend, varmap)
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for Expr<V> {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         self.inner
-            .encode_constraint_implies_repr(repr, solver, varmap)
+            .encode_constraint_implies_repr(repr, backend, varmap)
     }
 
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         self.inner
-            .encode_constraint_equals_repr(repr, solver, varmap)
+            .encode_constraint_equals_repr(repr, backend, varmap)
     }
 
-    fn encode_constraint_repr_cheap<S: Backend>(
+    fn encode_constraint_repr_cheap<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         self.inner
-            .encode_constraint_repr_cheap(repr, solver, varmap)
+            .encode_constraint_repr_cheap(repr, backend, varmap)
     }
 }
 
@@ -208,35 +208,35 @@ where
 }
 
 impl<V: SatVar> ExprEnum<V> {
-    fn encode_tree<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) -> i32 {
+    fn encode_tree<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) -> i32 {
         match self {
             ExprEnum::Or(lhs, rhs) => {
-                let lhs_var = lhs.encode_tree(solver, varmap);
-                let rhs_var = rhs.encode_tree(solver, varmap);
+                let lhs_var = lhs.encode_tree(backend, varmap);
+                let rhs_var = rhs.encode_tree(backend, varmap);
                 let new_var = varmap.new_var();
 
-                solver.add_clause(clause!(-new_var, lhs_var, rhs_var));
-                solver.add_clause(clause!(new_var, -lhs_var));
-                solver.add_clause(clause!(new_var, -rhs_var));
+                backend.add_clause(clause!(-new_var, lhs_var, rhs_var));
+                backend.add_clause(clause!(new_var, -lhs_var));
+                backend.add_clause(clause!(new_var, -rhs_var));
 
                 new_var
             }
             ExprEnum::And(lhs, rhs) => {
-                let lhs_var = lhs.encode_tree(solver, varmap);
-                let rhs_var = rhs.encode_tree(solver, varmap);
+                let lhs_var = lhs.encode_tree(backend, varmap);
+                let rhs_var = rhs.encode_tree(backend, varmap);
                 let new_var = varmap.new_var();
 
-                solver.add_clause(clause!(-new_var, lhs_var));
-                solver.add_clause(clause!(-new_var, rhs_var));
-                solver.add_clause(clause!(-lhs_var, -rhs_var, new_var));
+                backend.add_clause(clause!(-new_var, lhs_var));
+                backend.add_clause(clause!(-new_var, rhs_var));
+                backend.add_clause(clause!(-lhs_var, -rhs_var, new_var));
 
                 new_var
             }
             ExprEnum::Not(e) => {
                 let new_var = varmap.new_var();
-                let e = e.encode_tree(solver, varmap);
-                solver.add_clause(clause!(-e, -new_var));
-                solver.add_clause(clause!(e, new_var));
+                let e = e.encode_tree(backend, varmap);
+                backend.add_clause(clause!(-e, -new_var));
+                backend.add_clause(clause!(e, new_var));
                 new_var
             }
             ExprEnum::Lit(e) => varmap.add_var(e),
@@ -245,7 +245,7 @@ impl<V: SatVar> ExprEnum<V> {
                 let repr = constraint.0.encode_repr(&mut collector, varmap);
 
                 for cls in collector.clauses {
-                    solver.add_clause(cls.into_iter());
+                    backend.add_clause(cls.into_iter());
                 }
 
                 repr
@@ -255,54 +255,54 @@ impl<V: SatVar> ExprEnum<V> {
 }
 
 impl<V: SatVar> Constraint<V> for ExprEnum<V> {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        let v = self.encode_tree(solver, varmap);
-        solver.add_clause(clause!(v));
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
+        let v = self.encode_tree(backend, varmap);
+        backend.add_clause(clause!(v));
     }
 }
 
 impl<V: SatVar> ConstraintRepr<V> for ExprEnum<V> {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let r = self.encode_tree(solver, varmap);
+        let r = self.encode_tree(backend, varmap);
 
         // Since `r` is always equal to the satisfiability of the expression,
         // we need to always use a new repr and form an implication.
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
-        solver.add_clause(clause!(-r, repr));
+        backend.add_clause(clause!(-r, repr));
 
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        let r = self.encode_tree(solver, varmap);
+        let r = self.encode_tree(backend, varmap);
 
         if let Some(repr) = repr {
-            solver.add_clause(clause!(repr, -r));
-            solver.add_clause(clause!(-repr, r));
+            backend.add_clause(clause!(repr, -r));
+            backend.add_clause(clause!(-repr, r));
             repr
         } else {
             r
         }
     }
 
-    fn encode_constraint_repr_cheap<S: Backend>(
+    fn encode_constraint_repr_cheap<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.encode_constraint_equals_repr(repr, solver, varmap)
+        self.encode_constraint_equals_repr(repr, backend, varmap)
     }
 }
 

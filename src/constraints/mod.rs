@@ -33,9 +33,9 @@ where
     V: SatVar,
     L: Debug + Clone + Into<VarType<V>>,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
         let var = varmap.add_var(self);
-        solver.add_clause(clause!(var));
+        backend.add_clause(clause!(var));
     }
 }
 
@@ -44,44 +44,44 @@ where
     V: SatVar,
     L: Debug + Clone + Into<VarType<V>>,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
         let var = varmap.add_var(self);
 
-        solver.add_clause(clause![-var, repr]);
+        backend.add_clause(clause![-var, repr]);
 
         repr
     }
 
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let var = varmap.add_var(self);
 
         if let Some(repr) = repr {
-            solver.add_clause(clause![-var, repr]);
-            solver.add_clause(clause![var, -repr]);
+            backend.add_clause(clause![-var, repr]);
+            backend.add_clause(clause![var, -repr]);
             repr
         } else {
             var
         }
     }
 
-    fn encode_constraint_repr_cheap<S: Backend>(
+    fn encode_constraint_repr_cheap<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
-        self.encode_constraint_equals_repr(repr, solver, varmap)
+        self.encode_constraint_equals_repr(repr, backend, varmap)
     }
 }
 
@@ -95,8 +95,8 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        solver.add_clause(self.0.map(|lit| varmap.add_var(lit.into())));
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
+        backend.add_clause(self.0.map(|lit| varmap.add_var(lit.into())));
     }
 }
 
@@ -106,10 +106,10 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
@@ -117,7 +117,7 @@ where
         for lit in self.0 {
             let sat_lit = varmap.add_var(lit);
 
-            solver.add_clause(clause![-sat_lit, repr]);
+            backend.add_clause(clause![-sat_lit, repr]);
         }
 
         repr
@@ -145,10 +145,10 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
         for v in self.0 {
             let v = varmap.add_var(v);
-            solver.add_clause(clause![v]);
+            backend.add_clause(clause![v]);
         }
     }
 }
@@ -159,16 +159,16 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
 
         let vars = self.0.map(|l| -varmap.add_var(l));
-        solver.add_clause(vars.chain(clause![repr]));
+        backend.add_clause(vars.chain(clause![repr]));
 
         repr
     }
@@ -195,14 +195,14 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
         let lits: Vec<_> = self.0.map(|l| varmap.add_var(l)).collect();
 
         for l in lits.windows(2) {
-            solver.add_clause(clause![-l[0], l[1]]);
+            backend.add_clause(clause![-l[0], l[1]]);
         }
 
-        solver.add_clause(clause![-lits[lits.len() - 1], lits[0]]);
+        backend.add_clause(clause![-lits[lits.len() - 1], lits[0]]);
     }
 }
 
@@ -212,17 +212,17 @@ where
     I: Iterator + Clone,
     I::Item: Into<VarType<V>> + Debug,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
         let lits: Vec<_> = self.0.clone().map(|l| varmap.add_var(l)).collect();
 
-        solver.add_clause(lits.iter().copied().chain(clause![repr]));
-        solver.add_clause(lits.into_iter().map(|l| -l).chain(clause![repr]));
+        backend.add_clause(lits.iter().copied().chain(clause![repr]));
+        backend.add_clause(lits.into_iter().map(|l| -l).chain(clause![repr]));
 
         repr
     }
@@ -249,10 +249,10 @@ where
     V: SatVar,
     C: ConstraintRepr<V>,
 {
-    fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        let repr = self.0.encode_constraint_implies_repr(None, solver, varmap);
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
+        let repr = self.0.encode_constraint_implies_repr(None, backend, varmap);
 
-        solver.add_clause(clause![-repr]);
+        backend.add_clause(clause![-repr]);
     }
 }
 
@@ -261,31 +261,31 @@ where
     V: SatVar,
     C: ConstraintRepr<V>,
 {
-    fn encode_constraint_implies_repr<S: Backend>(
+    fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let not_repr = repr.unwrap_or_else(|| varmap.new_var());
-        let repr = self.0.encode_constraint_equals_repr(None, solver, varmap);
+        let repr = self.0.encode_constraint_equals_repr(None, backend, varmap);
 
-        solver.add_clause(clause![repr, not_repr]);
+        backend.add_clause(clause![repr, not_repr]);
 
         not_repr
     }
 
-    fn encode_constraint_equals_repr<S: Backend>(
+    fn encode_constraint_equals_repr<B: Backend>(
         self,
         repr: Option<i32>,
-        solver: &mut S,
+        backend: &mut B,
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let not_repr = repr.unwrap_or_else(|| varmap.new_var());
-        let repr = self.0.encode_constraint_equals_repr(None, solver, varmap);
+        let repr = self.0.encode_constraint_equals_repr(None, backend, varmap);
 
-        solver.add_clause(clause![repr, not_repr]);
-        solver.add_clause(clause![-repr, -not_repr]);
+        backend.add_clause(clause![repr, not_repr]);
+        backend.add_clause(clause![-repr, -not_repr]);
 
         not_repr
     }
