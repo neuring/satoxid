@@ -207,8 +207,6 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 /// structure of the constraint provides a suitable candidate.
 /// The used repr is returned by the methods.
 /// If a repr was provided when calling the methods the same repr has to be returned.
-/// If the constraint isn't satisified the whole generated encoding has to be
-/// satisfiable regardless what value repr is.
 // We need this trait because we cannot generally express the implication of a constraint
 // to a repr.
 // For example if we take all clauses of an AtMostK constraint the input lits
@@ -220,6 +218,7 @@ pub trait Constraint<V: SatVar>: Debug + Sized + Clone {
 // trait.
 pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     /// Encode if `Self` is satisified, that `repr` is true.
+    /// Otherwise `repr` is not constrained and can be true or false.
     fn encode_constraint_implies_repr<B: Backend>(
         self,
         repr: Option<i32>,
@@ -244,9 +243,10 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
     }
 
     /// Encode that repr is true if the constraint is satisfied.
-    /// The semantics are less restrictive for to allow for cheaper encoding.
-    /// No guarantees are given about the constraints of repr if the constraint is false.
-    /// Usually it has either the semantics of implies_repr or equals_repr.
+    /// The implementation can decide if it has the semantics of
+    /// [`encode_constraint_implies_repr`](ConstraintRepr::encode_constraint_implies_repr) 
+    /// or [`encode_constraint_equals_repr`](ConstraintRepr::encode_constraint_equals_repr),
+    /// depending on what is cheaper to encode.
     fn encode_constraint_repr_cheap<B: Backend>(
         self,
         repr: Option<i32>,
@@ -521,7 +521,7 @@ where
     /// Encode a constraint such that a variable represents it.
     /// If the constraint in the solved model is true, the return variable (repr) will
     /// also be true.
-    /// Otherwise there it doesn't constrain repr which can either be true or false.
+    /// Otherwise it doesn't constrain repr which can either be true or false.
     pub fn add_constraint_implies_repr<C: ConstraintRepr<V>>(
         &mut self,
         constraint: C,
