@@ -12,6 +12,25 @@ use crate::{clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType
 /// It implements the [`BitAnd`], [`BitOr`] and [`Not`] traits, which should be used for
 /// the construction of boolean formulas.
 ///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::Expr, Lit};
+/// #
+/// # fn main() {
+/// #
+/// # let mut encoder = CadicalEncoder::new();
+/// #
+/// let expr = !(Expr::new("a") | "b") & "c"; // encoding the formula !(a | b) & c
+/// encoder.add_constraint(expr);
+///
+/// if let Some(model) = encoder.solve() {
+///     assert!(model.lit(Lit::Neg("a")).unwrap());
+///     assert!(model.lit(Lit::Neg("b")).unwrap());
+///     assert!(model.lit(Lit::Pos("c")).unwrap());
+/// }
+/// # }
+/// ```
+///
 /// **NOTE:** If you just want to 'and' or 'or' a bunch of literals use [`And`](crate::constraints::And) or [`Or`](crate::constraints::Or) for more efficient encodings.
 #[derive(Clone)]
 pub struct Expr<V> {
