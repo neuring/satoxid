@@ -234,7 +234,7 @@ where
 {
     for p in P::iter() {
         let property = p.into();
-        if model.var(House { number, property }).unwrap() {
+        if model[House { number, property }] {
             print!(", {:?}", p);
         }
     }

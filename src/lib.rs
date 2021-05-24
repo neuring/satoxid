@@ -400,6 +400,26 @@ impl<V: SatVar> Model<V> {
     }
 }
 
+impl<V, L> Index<L> for Model<V>
+where
+    V: SatVar,
+    L: Into<VarType<V>> + Debug + Clone,
+{
+    type Output = bool;
+
+    fn index(&self, l: L) -> &Self::Output {
+        let lit = l.clone().into();
+
+        if self.assignments.contains(&lit) {
+            &true
+        } else if self.assignments.contains(&!lit) {
+            &false
+        } else {
+            panic!("Literal {:?} not contained in model!", l);
+        }
+    }
+}
+
 impl<V: SatVar + Ord> Model<V> {
     #[allow(unused)]
     pub(crate) fn print_model(&self) {

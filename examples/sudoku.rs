@@ -79,7 +79,7 @@ fn print_solution_from_model(model: &Model<Tile>) {
     for y in 0..9 {
         for x in 0..9 {
             let v: Vec<_> = (1..=9)
-                .filter(|&value| model.var(Tile { x, y, value }).unwrap())
+                .filter(|&value| model[Tile { x, y, value }])
                 .collect();
             assert_eq!(v.len(), 1);
             print!("{} ", v[0]);
