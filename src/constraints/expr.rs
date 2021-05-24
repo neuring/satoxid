@@ -23,11 +23,10 @@ use crate::{clause, Backend, Constraint, ConstraintRepr, SatVar, VarMap, VarType
 /// let expr = !(Expr::new("a") | "b") & "c"; // encoding the formula !(a | b) & c
 /// encoder.add_constraint(expr);
 ///
-/// if let Some(model) = encoder.solve() {
-///     assert!(model.lit(Lit::Neg("a")).unwrap());
-///     assert!(model.lit(Lit::Neg("b")).unwrap());
-///     assert!(model.lit(Lit::Pos("c")).unwrap());
-/// }
+/// let model = encoder.solve().unwrap();
+/// assert!(model[Lit::Neg("a")]);
+/// assert!(model[Lit::Neg("b")]);
+/// assert!(model[Lit::Pos("c")]);
 /// # }
 /// ```
 ///

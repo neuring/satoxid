@@ -7,6 +7,26 @@ use crate::{
 
 /// Implication constraint.
 /// If `cond` is satisfied true then the `then` constraint has to be true.
+/// 
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::{If, And}};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let cond = And(vec!["a", "b"].into_iter());
+/// let then = "c";
+///
+/// encoder.add_constraint(If { cond, then });
+///
+/// let model = encoder.solve().unwrap();
+/// if model["a"] && model["b"] {
+///     assert!(model["c"])
+/// } else {
+///     // "c" can be either true or false.
+/// }
+/// # }
+///
+/// ```
 #[derive(Debug, Clone)]
 pub struct If<C, T> {
     pub cond: C, // If condition constraint is true

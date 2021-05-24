@@ -86,6 +86,20 @@ where
 }
 
 /// Constraint which represents a simple clause.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::Or};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = Or(vec!["a", "b", "c"].into_iter());
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model["a"] || model["b"] || model["c"]);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct Or<I>(pub I);
 
@@ -136,6 +150,20 @@ where
 }
 
 /// Constraint which requires all literals to be true.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::And};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = And(vec!["a", "b", "c"].into_iter());
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model["a"] && model["b"] && model["c"]);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct And<I>(pub I);
 
@@ -186,6 +214,20 @@ where
 }
 
 /// Constraint which requires all literals to be same value.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::Equal};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = Equal(vec!["a", "b", "c"].into_iter());
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model["a"] == model["b"] && model["a"] == model["b"]);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct Equal<I>(pub I);
 
@@ -241,6 +283,19 @@ where
 
 /// Constraint which inverts a constraint.
 /// If a constraint `C` is unsatisfiable than `Not(C)` is satisfiable and vice versa.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, Lit, constraints::{Not, Or}};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = Not(Or(vec!["a", "b", "c"].into_iter()));
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model[Lit::Neg("a")] && model[Lit::Neg("b")] && model[Lit::Neg("c")]);
+/// # }
 #[derive(Debug, Clone)]
 pub struct Not<C>(pub C);
 

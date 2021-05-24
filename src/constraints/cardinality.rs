@@ -82,7 +82,25 @@ where
     prev_s
 }
 
-/// This constraint encodes the requirement that at most `k` of `lits are true.
+/// This constraint encodes the requirement that at most `k` of `lits` are true.
+/// 
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::AtMostK};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = AtMostK {
+///     k: 2,
+///     lits: vec!["a", "b", "c", "d"].into_iter(),
+/// };
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// let true_lits = model.vars().filter(|l| l.is_pos()).count();
+/// assert!(true_lits <= 2);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct AtMostK<I> {
     pub lits: I,
@@ -216,6 +234,24 @@ where
 }
 
 /// This constraint encodes the requirement that at least `k` of `lits` are true.
+/// 
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::AtLeastK};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = AtLeastK {
+///     k: 2,
+///     lits: vec!["a", "b", "c", "d"].into_iter(),
+/// };
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// let true_lits = model.vars().filter(|l| l.is_pos()).count();
+/// assert!(true_lits >= 2);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct AtLeastK<I> {
     pub lits: I,
@@ -337,6 +373,24 @@ where
 }
 
 /// This constraint encodes the requirement that exactly `k` of `lits` are true.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::ExactlyK};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let constraint = ExactlyK {
+///     k: 2,
+///     lits: vec!["a", "b", "c", "d"].into_iter(),
+/// };
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// let true_lits = model.vars().filter(|l| l.is_pos()).count();
+/// assert!(true_lits == 2);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct ExactlyK<I> {
     pub lits: I,
@@ -461,6 +515,24 @@ where
 
 /// Constraint to ensure that several sets of literals have all the same number of true
 /// literals.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::SameCardinality};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let mut constraint = SameCardinality::new();
+/// constraint.add_lits(0..5);
+/// constraint.add_lits(5..10);
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// let count0 = (0..5).filter(|&v| model[v]).count();
+/// let count1 = (5..10).filter(|&v| model[v]).count();
+/// assert_eq!(count0, count1);
+/// # }
+/// ```
 #[derive(Clone, Debug)]
 pub struct SameCardinality<V> {
     lits: Vec<Vec<VarType<V>>>,
@@ -601,10 +673,29 @@ fn encode_same_cardinality_repr<V: SatVar>(
 }
 
 /// Constraint which encodes that fewer literals are true in `smaller` than in `larger`.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, constraints::LessCardinality};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// let mut constraint = LessCardinality {
+///     smaller: 0..5,
+///     larger: 5..10,
+/// };
+///
+/// encoder.add_constraint(constraint);
+///
+/// let model = encoder.solve().unwrap();
+/// let count0 = (0..5).filter(|&v| model[v]).count();
+/// let count1 = (5..10).filter(|&v| model[v]).count();
+/// assert!(count0 < count1);
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct LessCardinality<I1, I2> {
-    larger: I1,
-    smaller: I2,
+    pub larger: I1,
+    pub smaller: I2,
 }
 
 impl<I1, I2, V> Constraint<V> for LessCardinality<I1, I2>

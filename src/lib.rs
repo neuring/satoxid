@@ -27,11 +27,11 @@
 //!
 //!     if let Some(model) = encoder.solve() {
 //!
-//!         let true_vars = model.vars()
+//!         let true_lits = model.vars()
 //!                              .filter(|v| v.is_pos())
 //!                              .count();
 //!
-//!         assert_eq!(true_vars, 1);
+//!         assert_eq!(true_lits, 1);
 //!     }
 //! }
 //! ```
@@ -61,7 +61,7 @@
 //!     value: u32,
 //! }
 //! ```
-//! A value of `Tile` has the meaning that the tile at position (`x`, `y`) has the 
+//! A value of `Tile` has the meaning that the tile at position (`x`, `y`) has the
 //! number in `value`.
 //!
 //! For a type to be usable as a SAT variable it needs to implement [`SatVar`],
@@ -74,8 +74,8 @@
 //!
 //! Finally there is a third type [`VarType`] which can be used as a literal.
 //! When using functions like
-//! [`add_constraint_implies_repr`](crate::Encoder::add_constraint_implies_repr) 
-//! Satoxid generates new variables which have no relation to the user defined SAT 
+//! [`add_constraint_implies_repr`](crate::Encoder::add_constraint_implies_repr)
+//! Satoxid generates new variables which have no relation to the user defined SAT
 //! variable like `Tile`.
 //! [`VarType`] enable the user to be able to use such _unnamed_ variables.
 //!
@@ -146,7 +146,12 @@
 //! This dependency can be disabled using the `cadical` feature.
 
 use core::fmt;
-use std::{collections::HashSet, fmt::Debug, hash::Hash, ops::Not};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    hash::Hash,
+    ops::{Index, Not},
+};
 
 pub mod constraints;
 
@@ -244,7 +249,7 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
 
     /// Encode that repr is true if the constraint is satisfied.
     /// The implementation can decide if it has the semantics of
-    /// [`encode_constraint_implies_repr`](ConstraintRepr::encode_constraint_implies_repr) 
+    /// [`encode_constraint_implies_repr`](ConstraintRepr::encode_constraint_implies_repr)
     /// or [`encode_constraint_equals_repr`](ConstraintRepr::encode_constraint_equals_repr),
     /// depending on what is cheaper to encode.
     fn encode_constraint_repr_cheap<B: Backend>(
@@ -258,6 +263,22 @@ pub trait ConstraintRepr<V: SatVar>: Constraint<V> {
 }
 
 /// Enum to define the polarity of variables.
+/// By itself `Lit` is a constraint, which requires that the variable it wraps is true 
+/// or false depending on the Variant `Pos` and `Neg`.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, Lit};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::new();
+/// encoder.add_constraint(Lit::Pos("a"));
+/// encoder.add_constraint(Lit::Neg("b"));
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model["a"]);
+/// assert!(!model["b"]);
+/// # }
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lit<V> {
     Pos(V),
@@ -443,6 +464,25 @@ impl<V: SatVar + Ord> Debug for Model<V> {
 /// Type which represents *every* used SAT variable by the encoder.
 /// It is either a _named_ user defined SAT variable.
 /// Or an _unnamed_ generated SAT variable.
+///
+/// Just like [`Lit`] it is a constraint.
+///
+/// # Example
+/// ```rust
+/// # use satoxid::{CadicalEncoder, Lit, VarType};
+/// # fn main() {
+/// # let mut encoder = CadicalEncoder::<&'static str>::new();
+/// let named_var = VarType::Named(Lit::Pos("a"));
+/// let unnamed_var = VarType::Unnamed(encoder.varmap.new_var());
+///
+/// encoder.add_constraint(named_var);
+/// encoder.add_constraint(unnamed_var);
+///
+/// let model = encoder.solve().unwrap();
+/// assert!(model[Lit::Pos("a")]);
+/// assert!(model[unnamed_var]);
+/// # }
+/// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum VarType<V> {
     Named(Lit<V>),
