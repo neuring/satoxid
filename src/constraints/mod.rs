@@ -261,7 +261,7 @@ where
         varmap: &mut VarMap<V>,
     ) -> i32 {
         let repr = repr.unwrap_or_else(|| varmap.new_var());
-        let lits: Vec<_> = self.0.clone().map(|l| varmap.add_var(l)).collect();
+        let lits: Vec<_> = self.0.map(|l| varmap.add_var(l)).collect();
 
         backend.add_clause(lits.iter().copied().chain(clause![repr]));
         backend.add_clause(lits.into_iter().map(|l| -l).chain(clause![repr]));

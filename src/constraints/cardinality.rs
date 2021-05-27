@@ -61,10 +61,12 @@ where
     }
 
     for (i, &v) in vars.iter().enumerate().skip(1) {
-        let new_s: Vec<_> = if i + 1 == vars.len() && out.is_some() {
-            out.unwrap().to_owned()
-        } else {
-            (0..k).map(|_| varmap.new_var()).collect()
+        let new_s: Vec<_> = match out {
+            Some(out) if i + 1 == vars.len() => out.to_owned(),
+
+            _ => iter::from_fn(|| Some(varmap.new_var()))
+                .take(k as usize)
+                .collect(),
         };
 
         circuit.or_gate(clause![v, prev_s[0]], new_s[0]);
@@ -83,7 +85,7 @@ where
 }
 
 /// This constraint encodes the requirement that at most `k` of `lits` are true.
-/// 
+///
 /// # Example
 /// ```rust
 /// # use satoxid::{CadicalEncoder, constraints::AtMostK};
@@ -234,7 +236,7 @@ where
 }
 
 /// This constraint encodes the requirement that at least `k` of `lits` are true.
-/// 
+///
 /// # Example
 /// ```rust
 /// # use satoxid::{CadicalEncoder, constraints::AtLeastK};
@@ -265,9 +267,7 @@ where
     I::Item: Into<VarType<V>> + Debug,
 {
     fn encode<S: Backend>(self, solver: &mut S, varmap: &mut VarMap<V>) {
-        if self.k == 0 {
-            return;
-        } else {
+        if self.k != 0 {
             let out = encode_cardinality_constraint(
                 self.lits,
                 self.k,
@@ -533,7 +533,7 @@ where
 /// assert_eq!(count0, count1);
 /// # }
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SameCardinality<V> {
     lits: Vec<Vec<VarType<V>>>,
 }
@@ -1292,9 +1292,7 @@ mod tests {
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
-        constraint
-            .add_lits(0..range)
-            .add_lits(range..2 * range);
+        constraint.add_lits(0..range).add_lits(range..2 * range);
 
         encoder.add_constraint(constraint);
 
@@ -1443,9 +1441,7 @@ mod tests {
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
-        constraint
-            .add_lits(0..range)
-            .add_lits(range..2 * range);
+        constraint.add_lits(0..range).add_lits(range..2 * range);
 
         let repr = constraint.encode_constraint_implies_repr(
             None,
@@ -1572,9 +1568,7 @@ mod tests {
         let range: u32 = 5;
 
         let mut constraint = SameCardinality::new();
-        constraint
-            .add_lits(0..range)
-            .add_lits(range..2 * range);
+        constraint.add_lits(0..range).add_lits(range..2 * range);
 
         let repr = constraint.encode_constraint_equals_repr(
             None,

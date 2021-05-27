@@ -15,24 +15,22 @@
 //!
 //! use Var::*;
 //!
-//! fn main() {
-//!     let mut encoder = CadicalEncoder::new();
+//! let mut encoder = CadicalEncoder::new();
 //!
-//!     let constraint = ExactlyK {
-//!         k: 1,
-//!         lits: [A, B, C].iter().copied()
-//!     };
+//! let constraint = ExactlyK {
+//!     k: 1,
+//!     lits: [A, B, C].iter().copied()
+//! };
 //!
-//!     encoder.add_constraint(constraint);
+//! encoder.add_constraint(constraint);
 //!
-//!     if let Some(model) = encoder.solve() {
+//! if let Some(model) = encoder.solve() {
 //!
-//!         let true_lits = model.vars()
-//!                              .filter(|v| v.is_pos())
-//!                              .count();
+//!     let true_lits = model.vars()
+//!                          .filter(|v| v.is_pos())
+//!                          .count();
 //!
-//!         assert_eq!(true_lits, 1);
-//!     }
+//!     assert_eq!(true_lits, 1);
 //! }
 //! ```
 //!
@@ -545,6 +543,12 @@ impl<V: SatVar, S: Default> Encoder<V, S> {
             varmap: VarMap::default(),
             debug: true,
         }
+    }
+}
+
+impl<V: SatVar, S: Default> Default for Encoder<V, S> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
