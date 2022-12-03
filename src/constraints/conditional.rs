@@ -100,23 +100,23 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct Iff<C, T> {
-    pub cond: C,
-    pub then: T,
+pub struct Iff<L, R> {
+    pub left: L,
+    pub right: R,
 }
 
-impl<V, C, T> Constraint<V> for Iff<C, T>
+impl<V, L, R> Constraint<V> for Iff<L, R>
 where
     V: SatVar,
-    C: ConstraintRepr<V>,
-    T: ConstraintRepr<V>,
+    L: ConstraintRepr<V>,
+    R: ConstraintRepr<V>,
 {
     fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
         let cond_repr = self
-            .cond
+            .left
             .encode_constraint_equals_repr(None, backend, varmap);
 
-        self.then.encode_constraint_equals_repr(Some(cond_repr), backend, varmap);
+        self.right.encode_constraint_equals_repr(Some(cond_repr), backend, varmap);
     }
 }
 
@@ -262,7 +262,7 @@ mod tests {
         let cond = Pos(5);
         let then = Pos(6);
 
-        encoder.add_constraint(Iff { cond, then });
+        encoder.add_constraint(Iff { left: cond, right: then });
 
         let r = retry_until_unsat(&mut encoder, |model| {
             model.print_model();
@@ -284,7 +284,7 @@ mod tests {
             lits: 3..=7,
         };
 
-        encoder.add_constraint(Iff { cond, then });
+        encoder.add_constraint(Iff { left: cond, right: then });
 
         let r = retry_until_unsat(&mut encoder, |model| {
             model.print_model();
