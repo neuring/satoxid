@@ -99,6 +99,27 @@ where
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Iff<C, T> {
+    pub cond: C,
+    pub then: T,
+}
+
+impl<V, C, T> Constraint<V> for Iff<C, T>
+where
+    V: SatVar,
+    C: ConstraintRepr<V>,
+    T: ConstraintRepr<V>,
+{
+    fn encode<B: Backend>(self, backend: &mut B, varmap: &mut VarMap<V>) {
+        let cond_repr = self
+            .cond
+            .encode_constraint_equals_repr(None, backend, varmap);
+
+        self.then.encode_constraint_equals_repr(Some(cond_repr), backend, varmap);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use num_integer::binomial;
@@ -232,5 +253,45 @@ mod tests {
                 + 2 * ((k + 1)..=range).map(|i| binomial(range, i)).sum::<u32>()
         );
         assert_eq!(r.total(), 1 << (range + 1));
+    }
+
+    #[test]
+    fn iff_then_simple() {
+        let mut encoder = CadicalEncoder::<u32>::new();
+
+        let cond = Pos(5);
+        let then = Pos(6);
+
+        encoder.add_constraint(Iff { cond, then });
+
+        let r = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            assert_eq!(model.var(5).unwrap(), model.var(6).unwrap());
+        });
+        assert_eq!(r, 2);
+    }
+
+    #[test]
+    fn iff_with_constraints() {
+        let mut encoder = CadicalEncoder::<u32>::new();
+
+        let cond = AtMostK {
+            k: 2,
+            lits: 1..=5,
+        };
+        let then = AtMostK {
+            k: 2,
+            lits: 3..=7,
+        };
+
+        encoder.add_constraint(Iff { cond, then });
+
+        let r = retry_until_unsat(&mut encoder, |model| {
+            model.print_model();
+            let left = (1..=5).filter(|l| model.var(*l).unwrap()).count() <= 2;
+            let right = (3..=7).filter(|l| model.var(*l).unwrap()).count() <= 2;
+            assert_eq!(left, right)
+        });
+        assert_eq!(r, 92/*TODO: Verify this is correct */);
     }
 }

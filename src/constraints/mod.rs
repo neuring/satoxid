@@ -472,7 +472,6 @@ mod tests {
             &mut encoder.backend,
             &mut encoder.varmap,
         );
-        dbg!(r);
 
         let res = constraint_implies_repr_tester(&mut encoder, r, |model| {
             model.vars().filter(|l| matches!(l, Lit::Pos(_))).count() == range
@@ -531,7 +530,6 @@ mod tests {
             &mut encoder.backend,
             &mut encoder.varmap,
         );
-        dbg!(r);
 
         let res = constraint_implies_repr_tester(&mut encoder, r, |model| {
             model.vars().all(|l| matches!(l, Lit::Pos(_)))

@@ -166,11 +166,9 @@ where
             );
 
             let r = -out.last().unwrap();
-            dbg!(r);
 
             if let Some(repr) = repr {
-                solver.add_clause(clause![r, repr]);
-                solver.add_clause(clause![-r, -repr]);
+                solver.add_clause(clause![-r, repr]);
                 repr
             } else {
                 r
@@ -207,11 +205,10 @@ where
             );
 
             let r = -out.last().unwrap();
-            dbg!(r);
 
             if let Some(repr) = repr {
-                solver.add_clause(clause![r, repr]);
-                solver.add_clause(clause![-r, -repr]);
+                solver.add_clause(clause![-r, repr]);
+                solver.add_clause(clause![r, -repr]);
                 repr
             } else {
                 r
@@ -313,8 +310,7 @@ where
             let r = *out.last().unwrap();
 
             if let Some(repr) = repr {
-                solver.add_clause(clause![r, repr]);
-                solver.add_clause(clause![-r, -repr]);
+                solver.add_clause(clause![-r, repr]);
                 repr
             } else {
                 r
@@ -347,8 +343,8 @@ where
             let r = *out.last().unwrap();
 
             if let Some(repr) = repr {
-                solver.add_clause(clause![r, repr]);
-                solver.add_clause(clause![-r, -repr]);
+                solver.add_clause(clause![-r, repr]);
+                solver.add_clause(clause![r, -repr]);
                 repr
             } else {
                 r
@@ -858,7 +854,7 @@ mod tests {
         let constraint = AtMostK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
@@ -885,7 +881,7 @@ mod tests {
         let constraint = AtMostK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
@@ -936,7 +932,7 @@ mod tests {
         let constraint = AtMostK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
@@ -1044,7 +1040,7 @@ mod tests {
         let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_implies_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
@@ -1070,7 +1066,7 @@ mod tests {
         let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
@@ -1129,7 +1125,7 @@ mod tests {
         let constraint = AtLeastK { k, lits };
 
         let repr = constraint.encode_constraint_equals_repr(
-            None,
+            Some(encoder.varmap.new_var()),
             &mut encoder.backend,
             &mut encoder.varmap,
         );
