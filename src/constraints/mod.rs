@@ -17,7 +17,7 @@ mod test_util;
 pub use cardinality::{
     AtLeastK, AtMostK, ExactlyK, LessCardinality, SameCardinality,
 };
-pub use conditional::If;
+pub use conditional::{If, Iff};
 pub use expr::Expr;
 
 #[doc(hidden)]
